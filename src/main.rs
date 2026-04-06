@@ -332,6 +332,6 @@ async fn main() -> Result<()> {
     // Wait for the router to drain its in-flight messages.
     let _ = router_handle.await;
 
-    info!("bridgecli shutdown complete");
+    info!("rustifymyclaw shutdown complete");
     Ok(())
 }

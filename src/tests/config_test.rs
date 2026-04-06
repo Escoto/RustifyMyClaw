@@ -95,17 +95,17 @@ output:
 
 #[test]
 fn env_var_interpolation_replaces_known_vars() {
-    std::env::set_var("TEST_TOKEN_BRIDGECLI", "secret123");
-    let raw = "token: ${TEST_TOKEN_BRIDGECLI}";
+    std::env::set_var("TEST_TOKEN_RUSTIFYMYCLAW", "secret123");
+    let raw = "token: ${TEST_TOKEN_RUSTIFYMYCLAW}";
     let result = interpolate_env_vars(raw).unwrap();
     assert_eq!(result, "token: secret123");
-    std::env::remove_var("TEST_TOKEN_BRIDGECLI");
+    std::env::remove_var("TEST_TOKEN_RUSTIFYMYCLAW");
 }
 
 #[test]
 fn env_var_interpolation_fails_on_missing_var() {
-    std::env::remove_var("BRIDGECLI_DEFINITELY_NOT_SET");
-    let raw = "token: ${BRIDGECLI_DEFINITELY_NOT_SET}";
+    std::env::remove_var("RUSTIFYMYCLAW_DEFINITELY_NOT_SET");
+    let raw = "token: ${RUSTIFYMYCLAW_DEFINITELY_NOT_SET}";
     assert!(interpolate_env_vars(raw).is_err());
 }
 

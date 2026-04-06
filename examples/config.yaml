@@ -1,0 +1,24 @@
+# RustifyMyClaw example configuration
+# Full field reference: docs/configuration.md
+# Default config path: ~/.rustifymyclaw/config.yaml
+
+workspaces:
+  - name: "my-project"
+    directory: "/home/user/projects/my-project"  # must exist
+    backend: "claude-cli"                          # claude-cli | codex-cli | gemini-cli
+    channels:
+      - kind: telegram
+        token: "${TELEGRAM_BOT_TOKEN}"             # set this env var before running
+        allowed_users:
+          - 123456789                              # numeric Telegram user ID
+          # - "@username"                          # or handle
+
+output:
+  max_message_chars: 4000
+  file_upload_threshold_bytes: 51200              # 50 KB
+  chunk_strategy: "natural"                       # natural | fixed
+
+# Optional: rate limiting
+# limits:
+#   max_requests: 10
+#   window_seconds: 60
