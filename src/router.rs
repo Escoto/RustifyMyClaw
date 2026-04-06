@@ -7,7 +7,6 @@ use tracing::{error, info};
 
 use crate::backend::CliBackend;
 use crate::command::BridgeCommand;
-use crate::config::OutputConfig;
 use crate::executor::Executor;
 use crate::formatter;
 use crate::session::SessionStore;
@@ -17,9 +16,9 @@ use crate::types::{FormattedResponse, InboundMessage, ResponseChunk, WorkspaceHa
 ///
 /// Each router is wired to a fixed set of backends (keyed by backend name), a shared
 /// session store, and the full pool of available workspaces for `/use` switching.
+/// Output formatting uses the per-channel `OutputConfig` carried in each `MessageContext`.
 pub struct Router {
     session_store: Arc<RwLock<SessionStore>>,
-    output_config: Arc<OutputConfig>,
     /// Backend registry: backend name → implementation.
     backends: HashMap<String, Arc<dyn CliBackend>>,
     /// All configured workspaces, keyed by name — used by `/use` to validate and swap.
@@ -29,13 +28,11 @@ pub struct Router {
 impl Router {
     pub fn new(
         session_store: Arc<RwLock<SessionStore>>,
-        output_config: Arc<OutputConfig>,
         backends: HashMap<String, Arc<dyn CliBackend>>,
         available_workspaces: HashMap<String, WorkspaceHandle>,
     ) -> Self {
         Self {
             session_store,
-            output_config,
             backends,
             available_workspaces,
         }
@@ -59,6 +56,7 @@ impl Router {
         let chat_id = msg.chat_id.clone();
         let workspace_arc = Arc::clone(&msg.context.workspace);
         let provider = Arc::clone(&msg.context.provider);
+        let output_config = Arc::clone(&msg.context.output_config);
 
         match command {
             BridgeCommand::NewSession => {
@@ -187,7 +185,7 @@ Any other message is forwarded to the AI backend.";
                     cli_resp.stdout
                 };
 
-                let response = formatter::format(&output, &self.output_config);
+                let response = formatter::format(&output, &output_config);
                 provider.send_response(&chat_id, response).await?;
             }
         }

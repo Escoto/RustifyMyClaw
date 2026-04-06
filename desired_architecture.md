@@ -1,6 +1,6 @@
 # BridgeCLI — Architecture Reference
 
-> **Version:** 2.1 — Updated post-Phase 1 implementation to reflect actual codebase
+> **Version:** 3.0 — Updated post-Phase 3 to reflect actual codebase
 > **Purpose:** Single source of truth for types, boundaries, and design decisions. Phase-specific build guides reference this document.
 
 ---
@@ -14,9 +14,9 @@ A Rust daemon that bridges messaging platforms (Telegram, WhatsApp, Slack) to lo
 │  TG Bot A    │──┐
 │  @coach_bot  │  │     ┌──────────────────────────────────────────┐     ┌──────────────┐
 └──────────────┘  ├────▶│              BridgeCLI                   │────▶│  claude -p   │
-┌──────────────┐  │     │  Listener → Router → Executor → Output  │◀────│  codex       │
+┌──────────────┐  │     │  Listener → Router → Executor → Output   │◀────│  codex       │
 │  WhatsApp    │──┤     └──────────────────────────────────────────┘     │  gemini      │
-│  Channel     │  │                     ▲                               └──────────────┘
+│  Channel     │  │                     ▲                                └──────────────┘
 └──────────────┘  │                     │
 ┌──────────────┐  │               config.yaml
 │  Slack       │──┘         ~/.rustifymyclaw/
@@ -92,10 +92,11 @@ pub struct InboundMessage {
 pub struct MessageContext {
     pub workspace: Arc<WorkspaceHandle>,
     pub provider: Arc<dyn ChannelProvider>,
+    pub output_config: Arc<OutputConfig>,
 }
 ```
 
-The channel listener stamps every message with its `MessageContext` at ingestion time. The listener already knows its workspace and its own provider reference — so the router never needs a lookup table. This was a design decision resolved during Phase 1 implementation.
+The channel listener stamps every message with its `MessageContext` at ingestion time. The listener already knows its workspace, its own provider reference, and its effective output config (channel overrides merged with global defaults via `effective_output_config()` in `config.rs`) — so the router never needs a lookup table. The router reads output config from `msg.context.output_config` and does not hold its own `output_config` field.
 
 ### CliResponse
 
@@ -148,11 +149,24 @@ workspaces:
         allowed_users:                                  # MANDATORY
           - "@user-x"
           - 987654321
+        max_message_chars: 3500                         # OPTIONAL — overrides global output.max_message_chars
 
       - kind: whatsapp
-        token: "${WHATSAPP_API_TOKEN}"
+        token: "${WHATSAPP_API_TOKEN}"                  # MANDATORY — Meta Graph API token
+        phone_number_id: "${WA_PHONE_NUMBER_ID}"        # MANDATORY (WhatsApp) — Meta Business phone number ID
+        webhook_port: 8080                              # OPTIONAL (WhatsApp) — port for inbound webhook server (default 8080)
+        verify_token: "${WA_VERIFY_TOKEN}"              # OPTIONAL (WhatsApp) — webhook verification token
         allowed_users:
           - "+5511999999999"
+
+      - kind: slack
+        token: "${SLACK_BOT_TOKEN}"                     # MANDATORY — xoxb-* bot token for Web API
+        app_token: "${SLACK_APP_TOKEN}"                 # MANDATORY (Slack) — xapp-* Socket Mode token
+        use_threads: true                               # OPTIONAL (Slack) — reply in-thread instead of top-level (default false)
+        max_message_chars: 3000                         # OPTIONAL — Slack renders poorly above ~3000 chars
+        allowed_users:
+          - "@dev_user"
+          - "U01ABC123"                                 # raw Slack user ID also accepted
 
   - name: "data-pipeline"
     directory: "/home/user-x/projects/pipeline"
@@ -191,19 +205,32 @@ pub struct WorkspaceConfig {
 #[derive(Debug, Deserialize)]
 pub struct ChannelConfig {
     pub kind: String,
-    pub bot_name: Option<String>,
+    pub bot_name: Option<String>,          // OPTIONAL — display/logging only
     pub token: String,
     pub allowed_users: Vec<AllowedUser>,
+
+    // Per-channel output overrides — both fall back to global OutputConfig when absent.
+    pub max_message_chars: Option<usize>,
+    pub file_upload_threshold_bytes: Option<usize>,
+
+    // WhatsApp-specific (ignored with a startup warning on non-whatsapp channels).
+    pub phone_number_id: Option<String>,   // MANDATORY for whatsapp — Meta Business phone number ID
+    pub webhook_port: Option<u16>,         // default 8080
+    pub verify_token: Option<String>,      // webhook verification secret
+
+    // Slack-specific (ignored with a startup warning on non-slack channels).
+    pub app_token: Option<String>,         // MANDATORY for slack — xapp-* Socket Mode token
+    pub use_threads: Option<bool>,         // default false — reply in-thread vs top-level
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OutputConfig {
     pub max_message_chars: usize,
     pub file_upload_threshold_bytes: usize,
     pub chunk_strategy: ChunkStrategy,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum ChunkStrategy {
     #[serde(rename = "natural")]
     Natural,
@@ -213,6 +240,10 @@ pub enum ChunkStrategy {
 ```
 
 **Env var interpolation:** The config loader replaces `${VAR_NAME}` patterns with `std::env::var("VAR_NAME")` at parse time via simple string parsing (find `${`, find `}`, extract, replace). No regex dependency.
+
+**Misplaced field warnings:** `validate()` calls `warn_misplaced_fields()` for each channel. If a platform-specific field (e.g. `phone_number_id`) appears on the wrong channel kind, a `tracing::warn!` is emitted at startup. The field is silently ignored at runtime — validation does not bail — but the operator gets a clear signal rather than a silent no-op.
+
+**`use_threads` (Slack-only):** The only channel-specific UX flag in the codebase. When `true`, `SlackProvider` sends responses as thread replies under the original message (`thread_ts` stored in an internal `RwLock<HashMap<platform_id, ts>>`). Telegram and WhatsApp have no equivalent; the field is meaningless and warned on those platforms.
 
 ---
 
@@ -258,7 +289,7 @@ pub trait CliBackend: Send + Sync {
 }
 ```
 
-### Backend Registry (Implemented)
+### Backend Build Factory (Implemented)
 
 `backend/mod.rs` exposes a `build(name) -> Result<Box<dyn CliBackend>>` factory. `main.rs` calls it once per distinct backend name at startup, wraps each result in `Arc`, and stores them in a `HashMap<String, Arc<dyn CliBackend>>` that is passed directly to `Router::new()`. The router owns the map and looks up backends by the workspace's `backend` string.
 
@@ -379,27 +410,30 @@ bridgecli/
 ├── desired_architecture.md
 ├── src/
 │   ├── main.rs
-│   ├── types.rs                # ChatId, ChannelKind, InboundMessage, MessageContext,
+│   ├── types.rs                # ChatId, ChannelKind, InboundMessage, MessageContext (with output_config),
 │   │                           # CliResponse, SessionState, FormattedResponse, ResponseChunk
-│   ├── config.rs               # AppConfig, YAML parsing, env var interpolation
+│   ├── config.rs               # AppConfig, YAML parsing, env var interpolation,
+│   │                           # effective_output_config(), warn_misplaced_fields()
 │   ├── security.rs             # SecurityGate (per-channel)
 │   ├── router.rs               # Orchestration hub: parse → session → execute → format → respond
 │   ├── session.rs              # SessionStore keyed by ChatId
 │   ├── executor.rs             # Dumb pipe: spawn CLI, capture output
-│   ├── formatter.rs            # Chunking (natural + char_boundary_floor), file upload
+│   ├── formatter.rs            # Chunking (natural + fixed + char_boundary_floor), file upload
 │   │
 │   ├── command/
-│   │   └── mod.rs              # BridgeCommand enum + parse
+│   │   └── mod.rs              # BridgeCommand enum + parse (incl. /use)
 │   │
 │   ├── backend/
-│   │   ├── mod.rs              # CliBackend trait + BackendRegistry
-│   │   └── claude.rs           # ClaudeCodeBackend
-│   │                           # Phase 2: codex.rs, gemini.rs
+│   │   ├── mod.rs              # CliBackend trait + build() factory
+│   │   ├── claude.rs           # ClaudeCodeBackend
+│   │   ├── codex.rs            # CodexBackend
+│   │   └── gemini.rs           # GeminiBackend
 │   │
 │   └── channel/
 │       ├── mod.rs              # ChannelProvider trait (start takes Arc<Self>)
-│       └── telegram.rs         # TelegramProvider (teloxide 0.17, polling mode)
-│                               # Phase 3: whatsapp.rs, slack.rs
+│       ├── telegram.rs         # TelegramProvider (teloxide 0.17, polling mode)
+│       ├── whatsapp.rs         # WhatsAppProvider (axum webhook + reqwest Graph API)
+│       └── slack.rs            # SlackProvider (Socket Mode via tokio-tungstenite)
 │
 └── tests/
     ├── config_test.rs
@@ -407,10 +441,13 @@ bridgecli/
     ├── session_test.rs
     ├── security_test.rs
     ├── executor_test.rs
-    └── formatter_test.rs
+    ├── formatter_test.rs
+    └── channel/
+        ├── whatsapp_test.rs
+        └── slack_test.rs
 ```
 
-### Dependencies (Phase 1 Actual)
+### Dependencies (Phase 3 Actual)
 
 ```toml
 [dependencies]
@@ -419,14 +456,17 @@ anyhow = "1"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
+serde_json = "1"
 async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }
 teloxide = { version = "0.17", features = ["macros"] }
+reqwest = { version = "0.12", features = ["json"] }
+axum = "0.7"
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+futures-util = "0.3"
 ```
-
-No `regex` dependency — env var interpolation uses simple string parsing.
 
 ---
 
@@ -435,13 +475,13 @@ No `regex` dependency — env var interpolation uses simple string parsing.
 | Phase | Scope | Key Deliverables |
 |-------|-------|-----------------|
 | 1 ✅ | Foundation + Telegram + Claude Code | Types, config, security, session, executor, formatter, TG listener, wired pipeline. 50 tests passing. |
-| 2 | Multi-backend + `/use` | Codex + Gemini backends, `/use` command, `Arc<RwLock>` workspace, `Fixed` chunking |
-| 3 | Multi-channel | WhatsApp + Slack providers, per-channel output limits |
+| 2 ✅ | Multi-backend + `/use` | Codex + Gemini backends, `/use` command, `Arc<RwLock>` workspace, `Fixed` chunking. 80 tests passing. |
+| 3 ✅ | Multi-channel | WhatsApp (axum webhook) + Slack (Socket Mode) providers, per-channel output limits, misplaced-field warnings. 103 tests passing. |
 | 4 | Hardening | Graceful shutdown, timeouts, rate limiting, config hot-reload, Windows |
 
 ---
 
-## 12. Implementation Lessons from Phase 1
+## 12. Implementation Lessons
 
 These are patterns that emerged during implementation and are now part of the project's conventions:
 
@@ -451,12 +491,26 @@ These are patterns that emerged during implementation and are now part of the pr
 
 All future channel providers must follow this pattern.
 
-### Backend Registry over Factory Function
+### Backend Build Factory + Router-Owned HashMap
 
-Backends are instantiated once at startup and stored in a `HashMap<String, Arc<dyn CliBackend>>`. The router looks up backends by name. This replaced the original factory-per-call design because multiple workspaces can share the same backend type, and `Arc` sharing is cheaper than repeated `Box` allocation.
+`backend/mod.rs` exposes a `build(name) -> Result<Box<dyn CliBackend>>` factory. `main.rs` calls it once per distinct backend name, wraps each result in `Arc`, and stores them in a `HashMap<String, Arc<dyn CliBackend>>` passed to `Router::new()`. The router owns the map directly. No `BackendRegistry` struct — the flat approach is clean and sufficient.
 
 When adding new backends, add a match arm to `build()` in `backend/mod.rs`.
 
 ### UTF-8 Safe Chunking
 
 All string slicing in the formatter goes through `char_boundary_floor()` to prevent panics on multi-byte characters. This is not optional — any new chunking logic must use it.
+
+### Per-Channel Output Config via MessageContext (Phase 3)
+
+Output config is stamped on each `InboundMessage` at ingestion time via `MessageContext.output_config`. The router reads config from the message context, not from its own fields. `effective_output_config()` in `config.rs` merges channel-specific overrides onto the global defaults. This pattern ensures each channel can have different chunk sizes without the router branching on channel type.
+
+### Channel-Specific Inbound Patterns (Phase 3)
+
+Each channel provider has a fundamentally different inbound model. This is handled inside the provider — the rest of the pipeline sees only `InboundMessage` on the `mpsc` channel.
+
+- **Telegram:** Long-polling via teloxide `repl()`. No open port needed.
+- **WhatsApp:** Webhook server (axum) — requires a publicly reachable port. Inbound is a POST from Meta's servers.
+- **Slack:** Socket Mode (WebSocket to Slack's servers) — no open port needed. Auto-reconnects on disconnect.
+
+This difference is invisible to the router and executor, which is the whole point of the Adapter pattern.

@@ -7,7 +7,9 @@ use tokio::sync::mpsc;
 
 use crate::types::{AllowedUser, ChatId, FormattedResponse, InboundMessage};
 
+pub mod slack;
 pub mod telegram;
+pub mod whatsapp;
 
 /// Abstraction over a messaging platform.
 ///
