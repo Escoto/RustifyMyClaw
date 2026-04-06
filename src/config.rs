@@ -5,6 +5,9 @@ use serde::Deserialize;
 
 use crate::types::AllowedUser;
 
+const KNOWN_BACKENDS: &[&str] = &["claude-cli", "codex-cli", "gemini-cli"];
+const KNOWN_CHANNELS: &[&str] = &["telegram", "whatsapp", "slack"];
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
     pub workspaces: Vec<WorkspaceConfig>,
@@ -91,9 +94,6 @@ pub fn effective_output_config(global: &OutputConfig, channel: &ChannelConfig) -
         chunk_strategy: global.chunk_strategy.clone(),
     }
 }
-
-const KNOWN_BACKENDS: &[&str] = &["claude-cli", "codex-cli", "gemini-cli"];
-const KNOWN_CHANNELS: &[&str] = &["telegram", "whatsapp", "slack"];
 
 /// Load and validate config from the default platform path.
 pub fn load() -> Result<AppConfig> {
