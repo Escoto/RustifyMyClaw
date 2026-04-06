@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 
 use crate::channel::ChannelProvider;
+use crate::config::OutputConfig;
 use crate::security::SecurityGate;
 use crate::types::{
     AllowedUser, ChannelKind, ChatId, FormattedResponse, InboundMessage, MessageContext,
@@ -25,6 +26,7 @@ pub struct TelegramProvider {
     bot: Bot,
     security_gate: SecurityGate,
     workspace: Arc<RwLock<WorkspaceHandle>>,
+    output_config: Arc<OutputConfig>,
 }
 
 impl TelegramProvider {
@@ -32,11 +34,13 @@ impl TelegramProvider {
         token: String,
         security_gate: SecurityGate,
         workspace: Arc<RwLock<WorkspaceHandle>>,
+        output_config: Arc<OutputConfig>,
     ) -> Self {
         Self {
             bot: Bot::new(token),
             security_gate,
             workspace,
+            output_config,
         }
     }
 }
@@ -51,11 +55,13 @@ impl ChannelProvider for TelegramProvider {
         let bot = self.bot.clone();
         let gate = self.security_gate.clone();
         let workspace = Arc::clone(&self.workspace);
+        let output_config = Arc::clone(&self.output_config);
 
         teloxide::repl(bot, move |_bot: Bot, msg: Message| {
             let tx = tx.clone();
             let gate = gate.clone();
             let workspace = Arc::clone(&workspace);
+            let output_config = Arc::clone(&output_config);
             let provider = Arc::clone(&self_arc);
 
             async move {
@@ -89,6 +95,7 @@ impl ChannelProvider for TelegramProvider {
                     context: MessageContext {
                         workspace: Arc::clone(&workspace),
                         provider,
+                        output_config: Arc::clone(&output_config),
                     },
                 };
 

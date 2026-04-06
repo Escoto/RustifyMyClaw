@@ -6,14 +6,13 @@ use serde::Deserialize;
 use tokio::sync::RwLock;
 
 use crate::channel::ChannelProvider;
+use crate::config::OutputConfig;
 
 /// Platform discriminant — prevents chat ID collisions across messaging platforms.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum ChannelKind {
     Telegram,
-    #[allow(dead_code)] // Phase 2+
     WhatsApp,
-    #[allow(dead_code)] // Phase 2+
     Slack,
 }
 
@@ -57,9 +56,12 @@ pub struct InboundMessage {
 ///
 /// `workspace` is wrapped in `Arc<RwLock<>>` so the `/use` command can swap the
 /// active workspace at runtime without replacing the Arc itself.
+/// `output_config` is the effective per-channel config (channel overrides merged with
+/// global defaults at startup), so the router always uses the correct limits.
 pub struct MessageContext {
     pub workspace: Arc<RwLock<WorkspaceHandle>>,
     pub provider: Arc<dyn ChannelProvider>,
+    pub output_config: Arc<OutputConfig>,
 }
 
 /// Handle to a workspace. Shared via `Arc<RwLock<>>` so the `/use` command can

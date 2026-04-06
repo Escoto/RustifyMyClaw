@@ -148,11 +148,24 @@ workspaces:
         allowed_users:                                  # MANDATORY
           - "@user-x"
           - 987654321
+        max_message_chars: 3500                         # OPTIONAL — overrides global output.max_message_chars
 
       - kind: whatsapp
-        token: "${WHATSAPP_API_TOKEN}"
+        token: "${WHATSAPP_API_TOKEN}"                  # MANDATORY — Meta Graph API token
+        phone_number_id: "${WA_PHONE_NUMBER_ID}"        # MANDATORY (WhatsApp) — Meta Business phone number ID
+        webhook_port: 8080                              # OPTIONAL (WhatsApp) — port for inbound webhook server (default 8080)
+        verify_token: "${WA_VERIFY_TOKEN}"              # OPTIONAL (WhatsApp) — webhook verification token
         allowed_users:
           - "+5511999999999"
+
+      - kind: slack
+        token: "${SLACK_BOT_TOKEN}"                     # MANDATORY — xoxb-* bot token for Web API
+        app_token: "${SLACK_APP_TOKEN}"                 # MANDATORY (Slack) — xapp-* Socket Mode token
+        use_threads: true                               # OPTIONAL (Slack) — reply in-thread instead of top-level (default false)
+        max_message_chars: 3000                         # OPTIONAL — Slack renders poorly above ~3000 chars
+        allowed_users:
+          - "@dev_user"
+          - "U01ABC123"                                 # raw Slack user ID also accepted
 
   - name: "data-pipeline"
     directory: "/home/user-x/projects/pipeline"
@@ -191,19 +204,32 @@ pub struct WorkspaceConfig {
 #[derive(Debug, Deserialize)]
 pub struct ChannelConfig {
     pub kind: String,
-    pub bot_name: Option<String>,
+    pub bot_name: Option<String>,          // OPTIONAL — display/logging only
     pub token: String,
     pub allowed_users: Vec<AllowedUser>,
+
+    // Per-channel output overrides — both fall back to global OutputConfig when absent.
+    pub max_message_chars: Option<usize>,
+    pub file_upload_threshold_bytes: Option<usize>,
+
+    // WhatsApp-specific (ignored with a startup warning on non-whatsapp channels).
+    pub phone_number_id: Option<String>,   // MANDATORY for whatsapp — Meta Business phone number ID
+    pub webhook_port: Option<u16>,         // default 8080
+    pub verify_token: Option<String>,      // webhook verification secret
+
+    // Slack-specific (ignored with a startup warning on non-slack channels).
+    pub app_token: Option<String>,         // MANDATORY for slack — xapp-* Socket Mode token
+    pub use_threads: Option<bool>,         // default false — reply in-thread vs top-level
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OutputConfig {
     pub max_message_chars: usize,
     pub file_upload_threshold_bytes: usize,
     pub chunk_strategy: ChunkStrategy,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub enum ChunkStrategy {
     #[serde(rename = "natural")]
     Natural,
@@ -213,6 +239,10 @@ pub enum ChunkStrategy {
 ```
 
 **Env var interpolation:** The config loader replaces `${VAR_NAME}` patterns with `std::env::var("VAR_NAME")` at parse time via simple string parsing (find `${`, find `}`, extract, replace). No regex dependency.
+
+**Misplaced field warnings:** `validate()` calls `warn_misplaced_fields()` for each channel. If a platform-specific field (e.g. `phone_number_id`) appears on the wrong channel kind, a `tracing::warn!` is emitted at startup. The field is silently ignored at runtime — validation does not bail — but the operator gets a clear signal rather than a silent no-op.
+
+**`use_threads` (Slack-only):** The only channel-specific UX flag in the codebase. When `true`, `SlackProvider` sends responses as thread replies under the original message (`thread_ts` stored in an internal `RwLock<HashMap<platform_id, ts>>`). Telegram and WhatsApp have no equivalent; the field is meaningless and warned on those platforms.
 
 ---
 
@@ -435,8 +465,8 @@ No `regex` dependency — env var interpolation uses simple string parsing.
 | Phase | Scope | Key Deliverables |
 |-------|-------|-----------------|
 | 1 ✅ | Foundation + Telegram + Claude Code | Types, config, security, session, executor, formatter, TG listener, wired pipeline. 50 tests passing. |
-| 2 | Multi-backend + `/use` | Codex + Gemini backends, `/use` command, `Arc<RwLock>` workspace, `Fixed` chunking |
-| 3 | Multi-channel | WhatsApp + Slack providers, per-channel output limits |
+| 2 ✅ | Multi-backend + `/use` | Codex + Gemini backends, `/use` command, `Arc<RwLock>` workspace, `Fixed` chunking. 80 tests passing. |
+| 3 ✅ | Multi-channel | WhatsApp (axum webhook) + Slack (Socket Mode) providers, per-channel output limits, misplaced-field warnings. 103 tests passing. |
 | 4 | Hardening | Graceful shutdown, timeouts, rate limiting, config hot-reload, Windows |
 
 ---
