@@ -14,9 +14,9 @@ A Rust daemon that bridges messaging platforms (Telegram, WhatsApp, Slack) to lo
 │  TG Bot A    │──┐
 │  @coach_bot  │  │     ┌──────────────────────────────────────────┐     ┌──────────────┐
 └──────────────┘  ├────▶│              BridgeCLI                   │────▶│  claude -p   │
-┌──────────────┐  │     │  Listener → Router → Executor → Output  │◀────│  codex       │
+┌──────────────┐  │     │  Listener → Router → Executor → Output   │◀────│  codex       │
 │  WhatsApp    │──┤     └──────────────────────────────────────────┘     │  gemini      │
-│  Channel     │  │                     ▲                               └──────────────┘
+│  Channel     │  │                     ▲                                └──────────────┘
 └──────────────┘  │                     │
 ┌──────────────┐  │               config.yaml
 │  Slack       │──┘         ~/.rustifymyclaw/
