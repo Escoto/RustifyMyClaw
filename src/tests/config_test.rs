@@ -255,3 +255,118 @@ output:
 "#;
     assert!(make_config(yaml).is_err());
 }
+
+// ─── Phase 4: timeout_seconds ────────────────────────────────────────────────
+
+#[test]
+fn timeout_seconds_absent_defaults_to_none() {
+    let cfg = make_config(VALID_YAML).unwrap();
+    assert!(cfg.workspaces[0].timeout_seconds.is_none());
+}
+
+#[test]
+fn timeout_seconds_parses_when_present() {
+    let yaml = r#"
+workspaces:
+  - name: "test-ws"
+    directory: "/tmp"
+    backend: "claude-cli"
+    timeout_seconds: 120
+    channels:
+      - kind: telegram
+        token: "tok"
+        allowed_users:
+          - "@user-x"
+output:
+  max_message_chars: 4000
+  file_upload_threshold_bytes: 51200
+  chunk_strategy: "natural"
+"#;
+    let cfg: AppConfig = serde_yaml::from_str(yaml).unwrap();
+    assert_eq!(cfg.workspaces[0].timeout_seconds, Some(120));
+}
+
+// ─── Phase 4: limits ─────────────────────────────────────────────────────────
+
+#[test]
+fn limits_absent_defaults_to_none() {
+    let cfg = make_config(VALID_YAML).unwrap();
+    assert!(cfg.limits.is_none());
+}
+
+#[test]
+fn limits_parses_when_present() {
+    let yaml = r#"
+workspaces:
+  - name: "test-ws"
+    directory: "/tmp"
+    backend: "claude-cli"
+    channels:
+      - kind: telegram
+        token: "tok"
+        allowed_users:
+          - "@user-x"
+output:
+  max_message_chars: 4000
+  file_upload_threshold_bytes: 51200
+  chunk_strategy: "natural"
+limits:
+  max_requests: 10
+  window_seconds: 60
+"#;
+    let cfg: AppConfig = serde_yaml::from_str(yaml).unwrap();
+    let limits = cfg.limits.unwrap();
+    assert_eq!(limits.max_requests, 10);
+    assert_eq!(limits.window_seconds, 60);
+}
+
+// ─── Phase 4: hot-reload helpers ─────────────────────────────────────────────
+
+#[test]
+fn load_from_path_returns_error_for_nonexistent_file() {
+    let result = load_from_path(std::path::Path::new("/nonexistent/path/config.yaml"));
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+        msg.contains("cannot read config file"),
+        "unexpected error: {msg}"
+    );
+}
+
+#[test]
+fn dirs_path_ends_with_config_yaml() {
+    let path = dirs_path();
+    assert!(
+        path.ends_with("config.yaml"),
+        "expected path to end with config.yaml, got: {}",
+        path.display()
+    );
+}
+
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn dirs_path_uses_rustifymyclaw_dir_on_unix() {
+    let path = dirs_path();
+    let s = path.to_string_lossy();
+    assert!(
+        s.contains(".rustifymyclaw"),
+        "expected .rustifymyclaw in path, got: {s}"
+    );
+}
+
+#[test]
+fn diff_reload_does_not_panic_on_identical_configs() {
+    let cfg = make_config(VALID_YAML).unwrap();
+    diff_reload(&cfg, &cfg.clone());
+}
+
+#[test]
+fn diff_reload_does_not_panic_on_limits_change() {
+    let old = make_config(VALID_YAML).unwrap();
+    let mut new = old.clone();
+    new.limits = Some(LimitsConfig {
+        max_requests: 5,
+        window_seconds: 30,
+    });
+    diff_reload(&old, &new);
+}

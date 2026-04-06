@@ -41,11 +41,10 @@ pub enum AllowedUser {
 /// An inbound message from any messaging platform, normalized to a common shape.
 pub struct InboundMessage {
     pub chat_id: ChatId,
-    /// Platform-native user identifier as a string (for `SecurityGate` comparison).
-    #[allow(dead_code)] // set at ingestion; available for logging/audit in later phases
+    /// Platform-native user identifier as a string (for `SecurityGate` comparison and rate limiting).
     pub user_id: String,
     pub text: String,
-    #[allow(dead_code)] // set at ingestion; available for rate-limiting in later phases
+    #[allow(dead_code)] // reserved for future audit logging
     pub timestamp: DateTime<Utc>,
     /// Routing context stamped by the channel listener at ingestion time.
     pub context: MessageContext,
@@ -72,14 +71,17 @@ pub struct WorkspaceHandle {
     pub directory: std::path::PathBuf,
     /// Backend identifier string, e.g. `"claude-cli"`.
     pub backend: String,
+    /// Optional CLI process timeout. `None` means no timeout (unlimited).
+    pub timeout: Option<Duration>,
 }
 
 /// Output from a single CLI invocation.
+#[derive(Debug)]
 pub struct CliResponse {
     pub stdout: String,
     pub stderr: String,
     pub exit_code: i32,
-    #[allow(dead_code)] // captured for Phase 4 telemetry/timeout logic
+    #[allow(dead_code)] // reserved for future telemetry/metrics
     pub duration: Duration,
 }
 

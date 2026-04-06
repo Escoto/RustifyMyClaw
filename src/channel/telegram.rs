@@ -9,6 +9,7 @@ use teloxide::types::InputFile;
 use tokio::sync::mpsc;
 
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use crate::channel::ChannelProvider;
 use crate::config::OutputConfig;
@@ -51,13 +52,14 @@ impl ChannelProvider for TelegramProvider {
         &self,
         tx: mpsc::Sender<InboundMessage>,
         self_arc: Arc<dyn ChannelProvider>,
+        shutdown: CancellationToken,
     ) -> Result<()> {
         let bot = self.bot.clone();
         let gate = self.security_gate.clone();
         let workspace = Arc::clone(&self.workspace);
         let output_config = Arc::clone(&self.output_config);
 
-        teloxide::repl(bot, move |_bot: Bot, msg: Message| {
+        let repl_future = teloxide::repl(bot, move |_bot: Bot, msg: Message| {
             let tx = tx.clone();
             let gate = gate.clone();
             let workspace = Arc::clone(&workspace);
@@ -105,8 +107,14 @@ impl ChannelProvider for TelegramProvider {
 
                 Ok(())
             }
-        })
-        .await;
+        });
+
+        tokio::select! {
+            _ = repl_future => {}
+            _ = shutdown.cancelled() => {
+                tracing::info!("telegram polling loop shutting down");
+            }
+        }
 
         Ok(())
     }

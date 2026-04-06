@@ -477,7 +477,7 @@ futures-util = "0.3"
 | 1 ✅ | Foundation + Telegram + Claude Code | Types, config, security, session, executor, formatter, TG listener, wired pipeline. 50 tests passing. |
 | 2 ✅ | Multi-backend + `/use` | Codex + Gemini backends, `/use` command, `Arc<RwLock>` workspace, `Fixed` chunking. 80 tests passing. |
 | 3 ✅ | Multi-channel | WhatsApp (axum webhook) + Slack (Socket Mode) providers, per-channel output limits, misplaced-field warnings. 103 tests passing. |
-| 4 | Hardening | Graceful shutdown, timeouts, rate limiting, config hot-reload, Windows |
+| 4 ✅ | Hardening | Graceful shutdown, timeouts, rate limiting, config hot-reload, Windows support. 125 tests passing. |
 
 ---
 

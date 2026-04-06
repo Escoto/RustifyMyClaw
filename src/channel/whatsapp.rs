@@ -13,6 +13,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use crate::channel::ChannelProvider;
 use crate::config::OutputConfig;
@@ -210,6 +211,7 @@ impl ChannelProvider for WhatsAppProvider {
         &self,
         tx: mpsc::Sender<InboundMessage>,
         self_arc: Arc<dyn ChannelProvider>,
+        shutdown: CancellationToken,
     ) -> Result<()> {
         let state = WebhookState {
             tx,
@@ -232,6 +234,7 @@ impl ChannelProvider for WhatsAppProvider {
         tracing::info!(port = self.webhook_port, "whatsapp webhook server started");
 
         axum::serve(listener, app)
+            .with_graceful_shutdown(shutdown.cancelled_owned())
             .await
             .context("whatsapp webhook server error")?;
         Ok(())
