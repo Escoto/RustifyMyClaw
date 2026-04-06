@@ -71,15 +71,21 @@ impl ChannelProvider for TelegramProvider {
                     return Ok(());
                 };
 
-                let user_id = match &msg.from {
-                    Some(u) => u.id.0.to_string(),
+                let user = match &msg.from {
+                    Some(u) => u,
                     None => {
                         tracing::trace!("telegram message with no sender — dropped");
                         return Ok(());
                     }
                 };
+                let user_id = user.id.0.to_string();
 
-                if !gate.is_allowed(&user_id) {
+                let username_allowed = user
+                    .username
+                    .as_deref()
+                    .is_some_and(|name| gate.is_allowed(&name.to_lowercase()));
+
+                if !username_allowed && !gate.is_allowed(&user_id) {
                     tracing::trace!(user_id, "unauthorized telegram message — dropped");
                     return Ok(());
                 }
@@ -154,15 +160,10 @@ impl ChannelProvider for TelegramProvider {
                     resolved.insert(id.to_string());
                 }
                 AllowedUser::Handle(handle) => {
-                    // The Telegram Bot API does not expose a username→ID lookup endpoint.
-                    // We store the handle as-is and warn the operator. Numeric IDs are
-                    // preferred for reliable allow-listing.
-                    tracing::warn!(
-                        handle,
-                        "Telegram username resolution via Bot API is not supported without \
-                         prior interaction. Storing handle as-is; numeric IDs are more reliable."
-                    );
-                    resolved.insert(handle.clone());
+                    // Normalize: strip leading '@' and lowercase so the gate can match
+                    // against the username field on incoming messages (which has no '@').
+                    let normalized = handle.strip_prefix('@').unwrap_or(handle).to_lowercase();
+                    resolved.insert(normalized);
                 }
             }
         }
