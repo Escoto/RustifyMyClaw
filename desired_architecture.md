@@ -1,4 +1,4 @@
-# BridgeCLI — Architecture Reference
+# RustifyMyClaw — Architecture Reference
 
 > **Version:** 3.0 — Updated post-Phase 3 to reflect actual codebase
 > **Purpose:** Single source of truth for types, boundaries, and design decisions. Phase-specific build guides reference this document.
@@ -13,7 +13,7 @@ A Rust daemon that bridges messaging platforms (Telegram, WhatsApp, Slack) to lo
 ┌──────────────┐
 │  TG Bot A    │──┐
 │  @coach_bot  │  │     ┌──────────────────────────────────────────┐     ┌──────────────┐
-└──────────────┘  ├────▶│              BridgeCLI                   │────▶│  claude -p   │
+└──────────────┘  ├────▶│              RustifyMyClaw                   │────▶│  claude -p   │
 ┌──────────────┐  │     │  Listener → Router → Executor → Output   │◀────│  codex       │
 │  WhatsApp    │──┤     └──────────────────────────────────────────┘     │  gemini      │
 │  Channel     │  │                     ▲                                └──────────────┘
@@ -397,14 +397,14 @@ The `MessageContext.workspace` field is `Arc<WorkspaceHandle>` in V1. In V2, thi
 
 ## 9. Concurrency: Dumb Pipe
 
-BridgeCLI does not manage CLI-level concurrency. Parallel prompts to the same workspace spawn parallel CLI processes. The CLI backend handles its own locking. BridgeCLI faithfully returns whatever the CLI outputs — success or lock error.
+RustifyMyClaw does not manage CLI-level concurrency. Parallel prompts to the same workspace spawn parallel CLI processes. The CLI backend handles its own locking. RustifyMyClaw faithfully returns whatever the CLI outputs — success or lock error.
 
 ---
 
 ## 10. Project Structure
 
 ```
-bridgecli/
+rustifymyclaw/
 ├── Cargo.toml
 ├── CLAUDE.md
 ├── desired_architecture.md

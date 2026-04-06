@@ -1,8 +1,8 @@
-# CLAUDE.md — BridgeCLI
+# CLAUDE.md — RustifyMyClaw
 
 ## Project
 
-Rust daemon bridging messaging platforms to local AI CLI tools. See `desired_architecture.md` for architecture and component specs.
+Rust daemon bridging messaging platforms to local AI CLI tools. See `docs/architecture.md` for architecture and component specs.
 
 ## Build & Run
 
@@ -90,6 +90,32 @@ cargo fmt --check              # format check
 - **Commit messages:** imperative mood, concise. `Add session reset on /new command` not `Added stuff`.
 - **One logical change per commit.** Don't mix refactors with features.
 - **Branch naming:** `feat/<name>`, `fix/<name>`, `refactor/<name>`.
+
+## How to Add a New Backend
+
+1. Create `src/backend/<name>.rs` with a struct that implements `CliBackend`.
+2. Implement `build_command()` — construct the `tokio::process::Command` with the correct binary and flags.
+3. Implement `parse_output()` — for most CLI tools this is a pass-through that constructs `CliResponse` from the raw outputs.
+4. Implement `name()` — return the config string identifier (e.g. `"newcli-cli"`).
+5. Add `pub mod <name>;` in `src/backend/mod.rs`.
+6. Add a match arm for the new name in `build()` in `src/backend/mod.rs`.
+7. Add the name to `KNOWN_BACKENDS` in `src/config.rs`.
+8. Add tests in `src/tests/backend/<name>_test.rs` and wire with `#[path = ...]` in the source file.
+9. Update the backends table in `README.md` and the backend-specific notes in `docs/configuration.md`.
+
+## How to Add a New Channel Provider
+
+1. Create `src/channel/<name>.rs` with a struct that implements `ChannelProvider`.
+2. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, stamp each message with `MessageContext`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
+3. Implement `send_response(&self, chat_id, response)` — deliver each `ResponseChunk` to the platform.
+4. Implement `resolve_users(&self, users)` — convert `AllowedUser` entries to platform-native ID strings for `SecurityGate`.
+5. Stamp `MessageContext` at ingestion: `workspace: Arc<WorkspaceHandle>`, `provider: self_arc.clone()`, `output_config: Arc::new(effective_output_config(global, channel_cfg))`.
+6. Add `pub mod <name>;` in `src/channel/mod.rs`.
+7. Add the kind string to `KNOWN_CHANNELS` in `src/config.rs`.
+8. Add construction and startup logic in the channel match block in `src/main.rs`.
+9. Add `warn_misplaced_fields()` entries in `src/config.rs` for any platform-specific config fields.
+10. Add tests in `src/tests/channel/<name>_test.rs` and wire with `#[path = ...]` in the source file.
+11. Update the channels table in `README.md` and add a field reference section in `docs/configuration.md`.
 
 ## Do Not
 
