@@ -1,25 +1,40 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
 
 use crate::types::AllowedUser;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
     pub workspaces: Vec<WorkspaceConfig>,
     pub output: OutputConfig,
+    /// Optional global rate-limiting policy. Absent means no rate limiting.
+    #[serde(default)]
+    pub limits: Option<LimitsConfig>,
 }
 
-#[derive(Debug, Deserialize)]
+/// Per-user rate limiting policy.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LimitsConfig {
+    /// Maximum requests allowed per user within the sliding window.
+    pub max_requests: u32,
+    /// Sliding window width in seconds.
+    pub window_seconds: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct WorkspaceConfig {
     pub name: String,
     pub directory: PathBuf,
     pub backend: String,
     pub channels: Vec<ChannelConfig>,
+    /// Optional CLI process timeout in seconds. Absent means no timeout.
+    #[serde(default)]
+    pub timeout_seconds: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ChannelConfig {
     pub kind: String,
     pub bot_name: Option<String>,
@@ -80,10 +95,16 @@ pub fn effective_output_config(global: &OutputConfig, channel: &ChannelConfig) -
 const KNOWN_BACKENDS: &[&str] = &["claude-cli", "codex-cli", "gemini-cli"];
 const KNOWN_CHANNELS: &[&str] = &["telegram", "whatsapp", "slack"];
 
-/// Load and validate config from `~/.rustifymyclaw/config.yaml`.
+/// Load and validate config from the default platform path.
 pub fn load() -> Result<AppConfig> {
-    let path = dirs_path();
-    let raw = std::fs::read_to_string(&path)
+    load_from_path(&dirs_path())
+}
+
+/// Load and validate config from an explicit path.
+///
+/// Used by both `load()` (startup) and the config hot-reload watcher.
+pub fn load_from_path(path: &Path) -> Result<AppConfig> {
+    let raw = std::fs::read_to_string(path)
         .with_context(|| format!("cannot read config file: {}", path.display()))?;
     let interpolated = interpolate_env_vars(&raw)?;
     let config: AppConfig = serde_yaml::from_str(&interpolated)
@@ -92,11 +113,100 @@ pub fn load() -> Result<AppConfig> {
     Ok(config)
 }
 
-fn dirs_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home)
+/// Return the default config file path for the current platform.
+pub fn dirs_path() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    #[cfg(not(target_os = "windows"))]
+    let base = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+
+    #[cfg(target_os = "windows")]
+    return PathBuf::from(base)
+        .join("RustifyMyClaw")
+        .join("config.yaml");
+    #[cfg(not(target_os = "windows"))]
+    PathBuf::from(base)
         .join(".rustifymyclaw")
         .join("config.yaml")
+}
+
+/// Log which differences between `old` and `new` are safe to apply vs require restart.
+///
+/// Called by the config watcher after a successful reload to inform the operator.
+pub fn diff_reload(old: &AppConfig, new: &AppConfig) {
+    // Safe-to-reload fields
+    if old.output.max_message_chars != new.output.max_message_chars
+        || old.output.file_upload_threshold_bytes != new.output.file_upload_threshold_bytes
+        || old.output.chunk_strategy != new.output.chunk_strategy
+    {
+        tracing::info!("config change detected: output settings (requires restart to apply)");
+    }
+
+    let old_limits = old
+        .limits
+        .as_ref()
+        .map(|l| (l.max_requests, l.window_seconds));
+    let new_limits = new
+        .limits
+        .as_ref()
+        .map(|l| (l.max_requests, l.window_seconds));
+    if old_limits != new_limits {
+        tracing::info!("config change detected: rate limits (hot-reloaded)");
+    }
+
+    // Restart-required changes
+    let old_ws_names: std::collections::HashSet<&str> =
+        old.workspaces.iter().map(|w| w.name.as_str()).collect();
+    let new_ws_names: std::collections::HashSet<&str> =
+        new.workspaces.iter().map(|w| w.name.as_str()).collect();
+    if old_ws_names != new_ws_names {
+        tracing::warn!(
+            "config change detected: workspaces added or removed — restart required to apply"
+        );
+    }
+
+    for old_ws in &old.workspaces {
+        if let Some(new_ws) = new.workspaces.iter().find(|w| w.name == old_ws.name) {
+            if old_ws.backend != new_ws.backend {
+                tracing::warn!(
+                    workspace = old_ws.name,
+                    "config change detected: backend changed — restart required to apply"
+                );
+            }
+            if old_ws.timeout_seconds != new_ws.timeout_seconds {
+                tracing::info!(
+                    workspace = old_ws.name,
+                    "config change detected: timeout_seconds (requires restart to apply)"
+                );
+            }
+            let old_ch_tokens: Vec<&str> =
+                old_ws.channels.iter().map(|c| c.token.as_str()).collect();
+            let new_ch_tokens: Vec<&str> =
+                new_ws.channels.iter().map(|c| c.token.as_str()).collect();
+            if old_ch_tokens != new_ch_tokens {
+                tracing::warn!(
+                    workspace = old_ws.name,
+                    "config change detected: channel tokens changed — restart required to apply"
+                );
+            }
+            let old_users: Vec<_> = old_ws
+                .channels
+                .iter()
+                .flat_map(|c| &c.allowed_users)
+                .collect();
+            let new_users: Vec<_> = new_ws
+                .channels
+                .iter()
+                .flat_map(|c| &c.allowed_users)
+                .collect();
+            if old_users.len() != new_users.len() {
+                tracing::warn!(
+                    workspace = old_ws.name,
+                    "config change detected: allowed_users changed — restart required to apply"
+                );
+            }
+        }
+    }
 }
 
 /// Replace all `${VAR_NAME}` occurrences with the corresponding environment variable.

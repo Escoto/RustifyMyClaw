@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::types::{AllowedUser, ChatId, FormattedResponse, InboundMessage};
 
@@ -23,11 +24,15 @@ pub trait ChannelProvider: Send + Sync {
     /// the router can call `send_response` on the originating provider. Passing it here
     /// avoids self-referential struct construction in the provider.
     ///
+    /// `shutdown` is cancelled when the daemon is stopping. The provider must exit
+    /// promptly when `shutdown.cancelled()` resolves.
+    ///
     /// This method runs indefinitely (polling loop). Spawn it as a Tokio task.
     async fn start(
         &self,
         tx: mpsc::Sender<InboundMessage>,
         self_arc: Arc<dyn ChannelProvider>,
+        shutdown: CancellationToken,
     ) -> Result<()>;
 
     /// Send a formatted response back to the originating chat.

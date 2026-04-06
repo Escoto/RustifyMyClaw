@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
+use tokio_util::sync::CancellationToken;
 
 use crate::channel::ChannelProvider;
 use crate::config::OutputConfig;
@@ -153,13 +154,21 @@ impl ChannelProvider for SlackProvider {
         &self,
         tx: mpsc::Sender<InboundMessage>,
         self_arc: Arc<dyn ChannelProvider>,
+        shutdown: CancellationToken,
     ) -> Result<()> {
         loop {
+            if shutdown.is_cancelled() {
+                break;
+            }
+
             let ws_url = match self.open_socket_connection().await {
                 Ok(url) => url,
                 Err(e) => {
                     tracing::error!(error = ?e, "slack socket connection failed — retrying in 5s");
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    tokio::select! {
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+                        _ = shutdown.cancelled() => break,
+                    }
                     continue;
                 }
             };
@@ -170,24 +179,43 @@ impl ChannelProvider for SlackProvider {
                 Ok(pair) => pair,
                 Err(e) => {
                     tracing::error!(error = ?e, "slack websocket connect failed — retrying in 5s");
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    tokio::select! {
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+                        _ = shutdown.cancelled() => break,
+                    }
                     continue;
                 }
             };
 
             let (mut write, mut read) = ws_stream.split();
 
-            while let Some(msg_result) = read.next().await {
+            'inner: loop {
+                let msg_result = tokio::select! {
+                    msg = read.next() => {
+                        match msg {
+                            Some(r) => r,
+                            None => {
+                                tracing::warn!("slack websocket stream ended — reconnecting");
+                                break 'inner;
+                            }
+                        }
+                    }
+                    _ = shutdown.cancelled() => {
+                        tracing::info!("slack socket mode shutting down");
+                        return Ok(());
+                    }
+                };
+
                 let raw = match msg_result {
                     Ok(WsMessage::Text(t)) => t,
                     Ok(WsMessage::Close(_)) => {
                         tracing::warn!("slack websocket closed by server — reconnecting");
-                        break;
+                        break 'inner;
                     }
                     Ok(_) => continue, // ping/pong/binary — ignore
                     Err(e) => {
                         tracing::error!(error = ?e, "slack websocket read error — reconnecting");
-                        break;
+                        break 'inner;
                     }
                 };
 
@@ -213,7 +241,7 @@ impl ChannelProvider for SlackProvider {
                     }
                     "disconnect" => {
                         tracing::warn!("slack requested disconnect — reconnecting");
-                        break;
+                        break 'inner;
                     }
                     "events_api" => {
                         let Some(payload) = envelope.payload else {
@@ -281,8 +309,14 @@ impl ChannelProvider for SlackProvider {
             }
 
             // Brief pause before reconnecting to avoid tight loops on persistent failures.
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+                _ = shutdown.cancelled() => break,
+            }
         }
+
+        tracing::info!("slack socket mode stopped");
+        Ok(())
     }
 
     async fn send_response(&self, chat_id: &ChatId, response: FormattedResponse) -> Result<()> {

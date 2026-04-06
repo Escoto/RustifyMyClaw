@@ -100,6 +100,7 @@ fn make_provider() -> SlackProvider {
         name: "test".to_string(),
         directory: PathBuf::from("/tmp"),
         backend: "claude-cli".to_string(),
+        timeout: None,
     }));
     let output_config = Arc::new(OutputConfig {
         max_message_chars: 3000,

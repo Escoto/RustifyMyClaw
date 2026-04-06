@@ -1,10 +1,16 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use tokio::io::AsyncReadExt;
 
 use crate::backend::CliBackend;
 use crate::types::{CliResponse, SessionState, WorkspaceHandle};
+
+/// Default CLI timeout when no `timeout` is configured on the workspace.
+///
+/// Set to a generous 10 minutes so the daemon does not silently hang forever while
+/// still providing an upper bound for runaway processes.
+const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// Executes a CLI backend command and captures its output.
 ///
@@ -20,6 +26,10 @@ impl Executor {
     }
 
     /// Spawn the CLI for `prompt` in the given workspace, respecting `session` state.
+    ///
+    /// If `workspace.timeout` is set, the process is killed and an error is returned
+    /// if it does not complete within that duration. The default timeout is
+    /// `DEFAULT_TIMEOUT` (10 minutes).
     pub async fn run(
         &self,
         prompt: &str,
@@ -41,8 +51,25 @@ impl Executor {
         let stdout_handle = child.stdout.take().expect("stdout is piped");
         let stderr_handle = child.stderr.take().expect("stderr is piped");
 
-        let (stdout_bytes, stderr_bytes) =
-            tokio::join!(read_to_end(stdout_handle), read_to_end(stderr_handle),);
+        let timeout_dur = workspace.timeout.unwrap_or(DEFAULT_TIMEOUT);
+
+        // Race the pipe-draining future against the timeout timer.
+        // The timeout must cover pipe reading too — a runaway process that never closes
+        // stdout/stderr would otherwise block read_to_end forever before we reach wait().
+        let pipe_result = tokio::select! {
+            bytes = async {
+                tokio::join!(read_to_end(stdout_handle), read_to_end(stderr_handle))
+            } => Some(bytes),
+            _ = tokio::time::sleep(timeout_dur) => None,
+        };
+
+        let (stdout_bytes, stderr_bytes) = match pipe_result {
+            Some(pair) => pair,
+            None => {
+                child.kill().await.ok();
+                bail!("CLI process timed out after {}s", timeout_dur.as_secs());
+            }
+        };
 
         let status = child
             .wait()
