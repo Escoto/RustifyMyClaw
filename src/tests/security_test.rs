@@ -29,5 +29,5 @@ fn exact_match_required() {
     // Handles are normalized before entering the gate (no '@', lowercased).
     let g = gate(&["user-x"]);
     assert!(!g.is_allowed("@user-x")); // raw '@' form never matches
-    assert!(!g.is_allowed("User-X"));  // case mismatch never matches
+    assert!(!g.is_allowed("User-X")); // case mismatch never matches
 }
