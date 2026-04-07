@@ -105,17 +105,18 @@ cargo fmt --check              # format check
 
 ## How to Add a New Channel Provider
 
-1. Create `src/channel/<name>.rs` with a struct that implements `ChannelProvider`.
-2. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, stamp each message with `MessageContext`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
-3. Implement `send_response(&self, chat_id, response)` — deliver each `ResponseChunk` to the platform.
-4. Implement `resolve_users(&self, users)` — convert `AllowedUser` entries to platform-native ID strings for `SecurityGate`.
-5. Stamp `MessageContext` at ingestion: `workspace: Arc<WorkspaceHandle>`, `provider: self_arc.clone()`, `output_config: Arc::new(effective_output_config(global, channel_cfg))`.
-6. Add `pub mod <name>;` in `src/channel/mod.rs`.
-7. Add the kind string to `KNOWN_CHANNELS` in `src/config.rs`.
-8. Add construction and startup logic in the channel match block in `src/main.rs`.
-9. Add `warn_misplaced_fields()` entries in `src/config.rs` for any platform-specific config fields.
-10. Add tests in `src/tests/channel/<name>_test.rs` and wire with `#[path = ...]` in the source file.
-11. Update the channels table in `README.md` and add a field reference section in `docs/configuration.md`.
+1. Create `src/channel/<name>.rs` with a struct that implements `ChannelProvider` and `ChannelProviderFactory`.
+2. Implement `ChannelProviderFactory::create(ch_config, workspace, global_output)` — validate provider-specific config fields, build a temporary provider with a dummy `SecurityGate` to call `resolve_users`, then build the real provider with the resolved gate and effective output config.
+3. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, stamp each message with `MessageContext`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
+4. Implement `send_response(&self, chat_id, response)` — deliver each `ResponseChunk` to the platform.
+5. Implement `resolve_users(&self, users)` — convert `AllowedUser` entries to platform-native ID strings for `SecurityGate`.
+6. Stamp `MessageContext` at ingestion: `workspace: Arc<WorkspaceHandle>`, `provider: self_arc.clone()`, `output_config: Arc::new(effective_output_config(global, channel_cfg))`.
+7. Add `pub mod <name>;` in `src/channel/mod.rs`.
+8. Add the kind string to `KNOWN_CHANNELS` in `src/config.rs`.
+9. Add a match arm for the new kind in `build()` in `src/channel/mod.rs`.
+10. Add `warn_misplaced_fields()` entries in `src/config.rs` for any platform-specific config fields.
+11. Add tests in `src/tests/channel/<name>_test.rs` and wire with `#[path = ...]` in the source file.
+12. Update the channels table in `README.md` and add a field reference section in `docs/configuration.md`.
 
 ## Do Not
 

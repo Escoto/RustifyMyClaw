@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -20,13 +20,9 @@ mod security;
 mod session;
 mod types;
 
-use crate::channel::slack::SlackProvider;
-use crate::channel::telegram::TelegramProvider;
-use crate::channel::whatsapp::WhatsAppProvider;
 use crate::channel::ChannelProvider;
 use crate::rate_limit::RateLimiter;
 use crate::router::Router;
-use crate::security::SecurityGate;
 use crate::session::SessionStore;
 use crate::types::WorkspaceHandle;
 
@@ -115,145 +111,14 @@ async fn main() -> Result<()> {
         }
 
         for ch_config in &ws_config.channels {
-            match ch_config.kind.as_str() {
-                "telegram" => {
-                    // Build a temporary provider just to call resolve_users (no clone cost).
-                    let tmp = TelegramProvider::new(
-                        ch_config.token.clone(),
-                        SecurityGate::new(Default::default()),
-                        Arc::clone(&workspace),
-                        Arc::clone(&global_output),
-                    );
-                    let resolved = tmp
-                        .resolve_users(&ch_config.allowed_users)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "workspace `{}`: failed to resolve telegram allowed_users",
-                                ws_config.name
-                            )
-                        })?;
-
-                    let gate = SecurityGate::new(resolved);
-                    let effective_output =
-                        Arc::new(config::effective_output_config(&global_output, ch_config));
-                    let provider: Arc<dyn ChannelProvider> = Arc::new(TelegramProvider::new(
-                        ch_config.token.clone(),
-                        gate,
-                        Arc::clone(&workspace),
-                        effective_output,
-                    ));
-
-                    info!(
-                        workspace = ws_config.name,
-                        bot_name = ch_config.bot_name.as_deref().unwrap_or("(unnamed)"),
-                        "telegram channel registered"
-                    );
-
-                    provider_arcs.push(provider);
-                }
-                "whatsapp" => {
-                    let phone_number_id = ch_config.phone_number_id.clone().with_context(|| {
-                        format!(
-                            "workspace `{}`: whatsapp channel requires `phone_number_id`",
-                            ws_config.name
-                        )
-                    })?;
-                    let verify_token = ch_config.verify_token.clone().unwrap_or_default();
-
-                    let tmp = WhatsAppProvider::new(
-                        ch_config.token.clone(),
-                        phone_number_id.clone(),
-                        ch_config.webhook_port,
-                        verify_token.clone(),
-                        SecurityGate::new(Default::default()),
-                        Arc::clone(&workspace),
-                        Arc::clone(&global_output),
-                    );
-                    let resolved = tmp
-                        .resolve_users(&ch_config.allowed_users)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "workspace `{}`: failed to resolve whatsapp allowed_users",
-                                ws_config.name
-                            )
-                        })?;
-
-                    let gate = SecurityGate::new(resolved);
-                    let effective_output =
-                        Arc::new(config::effective_output_config(&global_output, ch_config));
-                    let provider: Arc<dyn ChannelProvider> = Arc::new(WhatsAppProvider::new(
-                        ch_config.token.clone(),
-                        phone_number_id,
-                        ch_config.webhook_port,
-                        verify_token,
-                        gate,
-                        Arc::clone(&workspace),
-                        effective_output,
-                    ));
-
-                    info!(
-                        workspace = ws_config.name,
-                        port = ch_config.webhook_port.unwrap_or(8080),
-                        "whatsapp channel registered"
-                    );
-
-                    provider_arcs.push(provider);
-                }
-
-                "slack" => {
-                    let app_token = ch_config.app_token.clone().with_context(|| {
-                        format!(
-                            "workspace `{}`: slack channel requires `app_token` (xapp-…)",
-                            ws_config.name
-                        )
-                    })?;
-                    let use_threads = ch_config.use_threads.unwrap_or(false);
-
-                    let tmp = SlackProvider::new(
-                        ch_config.token.clone(),
-                        app_token.clone(),
-                        use_threads,
-                        SecurityGate::new(Default::default()),
-                        Arc::clone(&workspace),
-                        Arc::clone(&global_output),
-                    );
-                    let resolved = tmp
-                        .resolve_users(&ch_config.allowed_users)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "workspace `{}`: failed to resolve slack allowed_users",
-                                ws_config.name
-                            )
-                        })?;
-
-                    let gate = SecurityGate::new(resolved);
-                    let effective_output =
-                        Arc::new(config::effective_output_config(&global_output, ch_config));
-                    let provider: Arc<dyn ChannelProvider> = Arc::new(SlackProvider::new(
-                        ch_config.token.clone(),
-                        app_token,
-                        use_threads,
-                        gate,
-                        Arc::clone(&workspace),
-                        effective_output,
-                    ));
-
-                    info!(
-                        workspace = ws_config.name,
-                        bot_name = ch_config.bot_name.as_deref().unwrap_or("(unnamed)"),
-                        "slack channel registered"
-                    );
-
-                    provider_arcs.push(provider);
-                }
-
-                other => {
-                    bail!("channel kind `{other}` is not implemented");
-                }
-            }
+            let provider = channel::build(
+                ch_config,
+                &ws_config.name,
+                Arc::clone(&workspace),
+                &global_output,
+            )
+            .await?;
+            provider_arcs.push(provider);
         }
     }
 

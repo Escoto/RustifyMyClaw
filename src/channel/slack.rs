@@ -10,8 +10,8 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_util::sync::CancellationToken;
 
-use crate::channel::ChannelProvider;
-use crate::config::OutputConfig;
+use crate::channel::{ChannelProvider, ChannelProviderFactory};
+use crate::config::{self, ChannelConfig, OutputConfig};
 use crate::security::SecurityGate;
 use crate::types::{
     AllowedUser, ChannelKind, ChatId, FormattedResponse, InboundMessage, MessageContext,
@@ -121,7 +121,44 @@ impl SlackProvider {
             thread_map: RwLock::new(HashMap::new()),
         }
     }
+}
 
+#[async_trait]
+impl ChannelProviderFactory for SlackProvider {
+    async fn create(
+        ch_config: &ChannelConfig,
+        workspace: Arc<RwLock<WorkspaceHandle>>,
+        global_output: &Arc<OutputConfig>,
+    ) -> Result<Arc<dyn ChannelProvider>> {
+        let app_token = ch_config
+            .app_token
+            .clone()
+            .context("slack channel requires `app_token` (xapp-…)")?;
+        let use_threads = ch_config.use_threads.unwrap_or(false);
+
+        let tmp = Self::new(
+            ch_config.token.clone(),
+            app_token.clone(),
+            use_threads,
+            SecurityGate::new(Default::default()),
+            Arc::clone(&workspace),
+            Arc::clone(global_output),
+        );
+        let resolved = tmp.resolve_users(&ch_config.allowed_users).await?;
+        let gate = SecurityGate::new(resolved);
+        let effective_output = Arc::new(config::effective_output_config(global_output, ch_config));
+        Ok(Arc::new(Self::new(
+            ch_config.token.clone(),
+            app_token,
+            use_threads,
+            gate,
+            workspace,
+            effective_output,
+        )))
+    }
+}
+
+impl SlackProvider {
     /// Open a Socket Mode WebSocket connection and return its URL.
     async fn open_socket_connection(&self) -> Result<String> {
         let resp: SocketModeConnectResponse = self

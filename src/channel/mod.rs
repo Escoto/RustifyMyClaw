@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
-use crate::types::{AllowedUser, ChatId, FormattedResponse, InboundMessage};
+use crate::config::{ChannelConfig, OutputConfig};
+use crate::types::{AllowedUser, ChatId, FormattedResponse, InboundMessage, WorkspaceHandle};
 
 pub mod slack;
 pub mod telegram;
@@ -41,4 +43,56 @@ pub trait ChannelProvider: Send + Sync {
     /// Resolve the `AllowedUser` list for this channel into a set of platform-native
     /// user ID strings suitable for `SecurityGate` comparison.
     async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>>;
+}
+
+/// Factory trait for constructing a [`ChannelProvider`] from configuration.
+///
+/// Each provider implements this to encapsulate its own config-field validation,
+/// user resolution, and two-phase [`SecurityGate`] construction. The companion
+/// [`build`] function dispatches to the correct implementation by channel kind.
+#[async_trait]
+pub trait ChannelProviderFactory: ChannelProvider + Sized {
+    /// Build a fully-initialised provider from a channel config block.
+    ///
+    /// Implementations should:
+    /// 1. Validate provider-specific fields in `ch_config`.
+    /// 2. Construct a temporary instance with a dummy `SecurityGate` to call `resolve_users`.
+    /// 3. Build the real instance with the resolved gate and effective output config.
+    async fn create(
+        ch_config: &ChannelConfig,
+        workspace: Arc<RwLock<WorkspaceHandle>>,
+        global_output: &Arc<OutputConfig>,
+    ) -> Result<Arc<dyn ChannelProvider>>;
+}
+
+/// Construct a [`ChannelProvider`] for the given channel config block.
+///
+/// This is the single entry point that `main.rs` calls for every configured channel.
+pub async fn build(
+    ch_config: &ChannelConfig,
+    workspace_name: &str,
+    workspace: Arc<RwLock<WorkspaceHandle>>,
+    global_output: &Arc<OutputConfig>,
+) -> Result<Arc<dyn ChannelProvider>> {
+    let provider: Arc<dyn ChannelProvider> = match ch_config.kind.as_str() {
+        "telegram" => telegram::TelegramProvider::create(ch_config, workspace, global_output).await,
+        "whatsapp" => whatsapp::WhatsAppProvider::create(ch_config, workspace, global_output).await,
+        "slack" => slack::SlackProvider::create(ch_config, workspace, global_output).await,
+        other => bail!("channel kind `{other}` is not implemented"),
+    }
+    .with_context(|| {
+        format!(
+            "workspace `{workspace_name}`: failed to build `{}` channel",
+            ch_config.kind
+        )
+    })?;
+
+    info!(
+        workspace = workspace_name,
+        kind = ch_config.kind,
+        bot_name = ch_config.bot_name.as_deref().unwrap_or("(unnamed)"),
+        "channel registered"
+    );
+
+    Ok(provider)
 }
