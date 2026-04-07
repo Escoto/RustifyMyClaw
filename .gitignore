@@ -15,5 +15,5 @@ target
 
 *.local.json
 .env
-
+.obsidian
 _*.md
