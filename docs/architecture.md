@@ -7,11 +7,11 @@ RustifyMyClaw is a Rust daemon that bridges messaging platforms to local AI CLI 
 ```
 ┌──────────────┐
 │  Telegram    │──┐
-├──────────────┤  │     ┌─────────────────────────────────────────┐     ┌──────────────┐
-│  WhatsApp    │──┼────▶│                RustifyMyClaw                │────▶│  claude      │
-├──────────────┤  │     │  Security → Router → Executor → Format  │◀────│  codex       │
-│  Slack       │──┘     └─────────────────────────────────────────┘     │  gemini      │
-└──────────────┘                        ▲                               └──────────────┘
+├──────────────┤  │      ┌─────────────────────────────────────────┐       ┌──────────────┐
+│  WhatsApp    │──┼───▶ │                RustifyMyClaw             │────▶ │  claude      │
+├──────────────┤  │      │  Security → Router → Executor → Format  │◀──── │  codex       │
+│  Slack       │──┘      └─────────────────────────────────────────┘       │  gemini      │
+└──────────────┘                        ▲                                  └──────────────┘
                                         │
                                ~/.rustifymyclaw/config.yaml
 ```
