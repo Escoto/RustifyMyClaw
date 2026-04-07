@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
-use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
@@ -291,7 +290,6 @@ impl ChannelProvider for SlackProvider {
                             chat_id,
                             user_id,
                             text,
-                            timestamp: Utc::now(),
                             context: MessageContext {
                                 workspace: Arc::clone(&self.workspace),
                                 provider: Arc::clone(&self_arc),

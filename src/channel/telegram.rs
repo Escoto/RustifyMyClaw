@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use chrono::Utc;
 use teloxide::prelude::*;
 use teloxide::types::InputFile;
 use tokio::sync::mpsc;
@@ -99,7 +98,6 @@ impl ChannelProvider for TelegramProvider {
                     chat_id,
                     user_id,
                     text: text.to_string(),
-                    timestamp: Utc::now(),
                     context: MessageContext {
                         workspace: Arc::clone(&workspace),
                         provider,
