@@ -82,16 +82,7 @@ impl ChannelProviderFactory for WhatsAppProvider {
             .context("whatsapp channel requires `phone_number_id`")?;
         let verify_token = ch_config.verify_token.clone().unwrap_or_default();
 
-        let tmp = Self::new(
-            ch_config.token.clone(),
-            phone_number_id.clone(),
-            ch_config.webhook_port,
-            verify_token.clone(),
-            SecurityGate::new(Default::default()),
-            Arc::clone(&workspace),
-            Arc::clone(global_output),
-        );
-        let resolved = tmp.resolve_users(&ch_config.allowed_users).await?;
+        let resolved = resolve_users(&ch_config.allowed_users)?;
         let gate = SecurityGate::new(resolved);
         let effective_output = Arc::new(config::effective_output_config(global_output, ch_config));
         Ok(Arc::new(Self::new(
@@ -329,28 +320,33 @@ impl ChannelProvider for WhatsAppProvider {
         }
         Ok(())
     }
+}
 
-    async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>> {
-        if users.is_empty() {
-            bail!("whatsapp channel must have at least one allowed_user");
-        }
-        let mut resolved = HashSet::new();
-        for user in users {
-            match user {
-                AllowedUser::Handle(phone) => {
-                    resolved.insert(phone.clone());
-                }
-                AllowedUser::NumericId(id) => {
-                    tracing::warn!(
-                        id,
-                        "numeric IDs are not valid WhatsApp identifiers; \
-                         use phone numbers like +5511999999999"
-                    );
-                }
+/// Resolve WhatsApp [`AllowedUser`] entries into platform-native ID strings
+/// suitable for [`SecurityGate`] comparison.
+///
+/// WhatsApp identifies users by phone number. Numeric IDs are not valid
+/// and are skipped with a warning.
+pub fn resolve_users(users: &[AllowedUser]) -> Result<HashSet<String>> {
+    if users.is_empty() {
+        bail!("whatsapp channel must have at least one allowed_user");
+    }
+    let mut resolved = HashSet::new();
+    for user in users {
+        match user {
+            AllowedUser::Handle(phone) => {
+                resolved.insert(phone.clone());
+            }
+            AllowedUser::NumericId(id) => {
+                tracing::warn!(
+                    id,
+                    "numeric IDs are not valid WhatsApp identifiers; \
+                     use phone numbers like +5511999999999"
+                );
             }
         }
-        Ok(resolved)
     }
+    Ok(resolved)
 }
 
 /// Truncate a message that exceeds WhatsApp's practical per-message limit.

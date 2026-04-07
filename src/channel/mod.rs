@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
@@ -8,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::{ChannelConfig, OutputConfig};
-use crate::types::{AllowedUser, ChatId, FormattedResponse, InboundMessage, WorkspaceHandle};
+use crate::types::{ChatId, FormattedResponse, InboundMessage, WorkspaceHandle};
 
 pub mod slack;
 pub mod telegram;
@@ -39,25 +38,21 @@ pub trait ChannelProvider: Send + Sync {
 
     /// Send a formatted response back to the originating chat.
     async fn send_response(&self, chat_id: &ChatId, response: FormattedResponse) -> Result<()>;
-
-    /// Resolve the `AllowedUser` list for this channel into a set of platform-native
-    /// user ID strings suitable for `SecurityGate` comparison.
-    async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>>;
 }
 
 /// Factory trait for constructing a [`ChannelProvider`] from configuration.
 ///
 /// Each provider implements this to encapsulate its own config-field validation,
-/// user resolution, and two-phase [`SecurityGate`] construction. The companion
-/// [`build`] function dispatches to the correct implementation by channel kind.
+/// user resolution, and [`SecurityGate`] construction. The companion [`build`]
+/// function dispatches to the correct implementation by channel kind.
 #[async_trait]
 pub trait ChannelProviderFactory: ChannelProvider + Sized {
     /// Build a fully-initialised provider from a channel config block.
     ///
     /// Implementations should:
     /// 1. Validate provider-specific fields in `ch_config`.
-    /// 2. Construct a temporary instance with a dummy `SecurityGate` to call `resolve_users`.
-    /// 3. Build the real instance with the resolved gate and effective output config.
+    /// 2. Resolve allowed users via the module-level `resolve_users` function.
+    /// 3. Build the provider with the resolved gate and effective output config.
     async fn create(
         ch_config: &ChannelConfig,
         workspace: Arc<RwLock<WorkspaceHandle>>,

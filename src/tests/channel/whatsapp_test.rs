@@ -34,27 +34,25 @@ fn exactly_at_limit_unchanged() {
 
 // ─── resolve_users ────────────────────────────────────────────────────────────
 
-#[tokio::test]
-async fn resolve_users_phone_numbers_pass_through() {
+#[test]
+fn resolve_users_phone_numbers_pass_through() {
     use crate::types::AllowedUser;
-    let provider = make_provider();
     let users = vec![
         AllowedUser::Handle("+5511999999999".to_string()),
         AllowedUser::Handle("+14155551234".to_string()),
     ];
-    let resolved = provider.resolve_users(&users).await.unwrap();
+    let resolved = resolve_users(&users).unwrap();
     assert!(resolved.contains("+5511999999999"));
     assert!(resolved.contains("+14155551234"));
     assert_eq!(resolved.len(), 2);
 }
 
-#[tokio::test]
-async fn resolve_users_numeric_id_is_skipped_with_warning() {
+#[test]
+fn resolve_users_numeric_id_is_skipped_with_warning() {
     use crate::types::AllowedUser;
-    let provider = make_provider();
     let users = vec![AllowedUser::NumericId(12345)];
     // Should succeed but produce an empty set (numeric IDs are not valid WA identifiers).
-    let resolved = provider.resolve_users(&users).await.unwrap();
+    let resolved = resolve_users(&users).unwrap();
     assert!(resolved.is_empty());
 }
 
@@ -95,36 +93,4 @@ fn webhook_payload_missing_messages_field_is_valid() {
     let json = r#"{ "entry": [{ "changes": [{ "value": {} }] }] }"#;
     let payload: WebhookPayload = serde_json::from_str(json).unwrap();
     assert!(payload.entry[0].changes[0].value.messages.is_empty());
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-fn make_provider() -> WhatsAppProvider {
-    use crate::config::{ChunkStrategy, OutputConfig};
-    use crate::security::SecurityGate;
-    use crate::types::WorkspaceHandle;
-    use std::collections::HashSet;
-    use std::path::PathBuf;
-    use tokio::sync::RwLock;
-
-    let workspace = Arc::new(RwLock::new(WorkspaceHandle {
-        name: "test".to_string(),
-        directory: PathBuf::from("/tmp"),
-        backend: "claude-cli".to_string(),
-        timeout: None,
-    }));
-    let output_config = Arc::new(OutputConfig {
-        max_message_chars: 4000,
-        file_upload_threshold_bytes: 51200,
-        chunk_strategy: ChunkStrategy::Natural,
-    });
-    WhatsAppProvider::new(
-        "token".to_string(),
-        "123456".to_string(),
-        None,
-        "verify_secret".to_string(),
-        SecurityGate::new(HashSet::new()),
-        workspace,
-        output_config,
-    )
 }

@@ -52,13 +52,7 @@ impl ChannelProviderFactory for TelegramProvider {
         workspace: Arc<RwLock<WorkspaceHandle>>,
         global_output: &Arc<OutputConfig>,
     ) -> Result<Arc<dyn ChannelProvider>> {
-        let tmp = Self::new(
-            ch_config.token.clone(),
-            SecurityGate::new(Default::default()),
-            Arc::clone(&workspace),
-            Arc::clone(global_output),
-        );
-        let resolved = tmp.resolve_users(&ch_config.allowed_users).await?;
+        let resolved = resolve_users(&ch_config.allowed_users)?;
         let gate = SecurityGate::new(resolved);
         let effective_output = Arc::new(config::effective_output_config(global_output, ch_config));
         Ok(Arc::new(Self::new(
@@ -174,24 +168,27 @@ impl ChannelProvider for TelegramProvider {
         }
         Ok(())
     }
+}
 
-    async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>> {
-        let mut resolved = HashSet::new();
-        for user in users {
-            match user {
-                AllowedUser::NumericId(id) => {
-                    resolved.insert(id.to_string());
-                }
-                AllowedUser::Handle(handle) => {
-                    // Normalize: strip leading '@' and lowercase so the gate can match
-                    // against the username field on incoming messages (which has no '@').
-                    let normalized = handle.strip_prefix('@').unwrap_or(handle).to_lowercase();
-                    resolved.insert(normalized);
-                }
+/// Resolve Telegram [`AllowedUser`] entries into platform-native ID strings
+/// suitable for [`SecurityGate`] comparison.
+///
+/// Handles are stripped of a leading `@` and lowercased to match the format
+/// that Telegram delivers on incoming messages.
+pub fn resolve_users(users: &[AllowedUser]) -> Result<HashSet<String>> {
+    let mut resolved = HashSet::new();
+    for user in users {
+        match user {
+            AllowedUser::NumericId(id) => {
+                resolved.insert(id.to_string());
+            }
+            AllowedUser::Handle(handle) => {
+                let normalized = handle.strip_prefix('@').unwrap_or(handle).to_lowercase();
+                resolved.insert(normalized);
             }
         }
-        Ok(resolved)
     }
+    Ok(resolved)
 }
 
 /// Truncate a message that exceeds Telegram's 4096-char hard limit.
