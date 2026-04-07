@@ -7,11 +7,11 @@ RustifyMyClaw is a Rust daemon that bridges messaging platforms to local AI CLI 
 ```
 ┌──────────────┐
 │  Telegram    │──┐
-├──────────────┤  │     ┌─────────────────────────────────────────┐     ┌──────────────┐
-│  WhatsApp    │──┼────▶│                RustifyMyClaw                │────▶│  claude      │
-├──────────────┤  │     │  Security → Router → Executor → Format  │◀────│  codex       │
-│  Slack       │──┘     └─────────────────────────────────────────┘     │  gemini      │
-└──────────────┘                        ▲                               └──────────────┘
+├──────────────┤  │      ┌─────────────────────────────────────────┐       ┌──────────────┐
+│  WhatsApp    │──┼───▶ │                RustifyMyClaw             │────▶ │  claude      │
+├──────────────┤  │      │  Security → Router → Executor → Format  │◀──── │  codex       │
+│  Slack       │──┘      └─────────────────────────────────────────┘       │  gemini      │
+└──────────────┘                        ▲                                  └──────────────┘
                                         │
                                ~/.rustifymyclaw/config.yaml
 ```
@@ -56,10 +56,12 @@ A message from Telegram to a response back:
 graph TD
     main --> config
     main --> router
-    main --> channel_telegram[channel/telegram]
-    main --> channel_whatsapp[channel/whatsapp]
-    main --> channel_slack[channel/slack]
+    main --> channel_mod[channel/mod — ChannelProvider + factory]
     main --> config_reload
+
+    channel_mod --> channel_telegram[channel/telegram]
+    channel_mod --> channel_whatsapp[channel/whatsapp]
+    channel_mod --> channel_slack[channel/slack]
 
     router --> command
     router --> session
@@ -95,6 +97,7 @@ graph TD
 | Channel `start()` signature | `&self` + separate `self_arc: Arc<dyn ChannelProvider>` argument | Polling closures need owned captures. A borrow doesn't live long enough; passing `Arc` explicitly avoids self-referential struct construction. |
 | Backend instantiation | One instance per distinct backend name, stored in `HashMap<String, Arc<dyn CliBackend>>` | No duplicate allocations when multiple workspaces share a backend. |
 | Config hot-reload | Rate limits apply immediately; all other changes require restart | Channel connections and security gates are constructed once at startup. Hot-patching them adds complexity without much operational value. |
+| Channel construction | `ChannelProviderFactory` trait + `channel::build()` dispatch | Each provider owns its config validation and two-phase `SecurityGate` construction. `main.rs` calls a single factory function per channel. |
 
 ## Extension Points
 
@@ -114,7 +117,7 @@ Add a match arm to `build()` in `src/backend/mod.rs` and the name to `KNOWN_BACK
 
 ### Adding a new channel provider
 
-See the step-by-step checklist in `CLAUDE.md`. The key interface is `ChannelProvider` in `src/channel/mod.rs`:
+See the step-by-step checklist in `CLAUDE.md`. The key interfaces are `ChannelProvider` and `ChannelProviderFactory` in `src/channel/mod.rs`:
 
 ```rust
 pub trait ChannelProvider: Send + Sync {
@@ -127,9 +130,21 @@ pub trait ChannelProvider: Send + Sync {
     async fn send_response(&self, chat_id: &ChatId, response: FormattedResponse) -> Result<()>;
     async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>>;
 }
+
+pub trait ChannelProviderFactory: ChannelProvider + Sized {
+    async fn create(
+        ch_config: &ChannelConfig,
+        workspace: Arc<RwLock<WorkspaceHandle>>,
+        global_output: &Arc<OutputConfig>,
+    ) -> Result<Arc<dyn ChannelProvider>>;
+}
 ```
 
-The `self_arc` parameter exists because polling closures need owned captures of the provider. Pass it through to any closure that stamps `MessageContext`.
+`ChannelProviderFactory::create()` encapsulates the two-phase construction pattern: build a temporary provider with a dummy `SecurityGate` to call `resolve_users()`, then build the real provider with the resolved gate and effective output config. Each provider validates its own config fields inside `create()`.
+
+The `self_arc` parameter on `start()` exists because polling closures need owned captures of the provider. Pass it through to any closure that stamps `MessageContext`.
+
+`channel::build()` dispatches by kind string and is the single entry point called from `main.rs`.
 
 ### Adding a new command
 

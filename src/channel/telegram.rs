@@ -10,8 +10,8 @@ use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-use crate::channel::ChannelProvider;
-use crate::config::OutputConfig;
+use crate::channel::{ChannelProvider, ChannelProviderFactory};
+use crate::config::{self, ChannelConfig, OutputConfig};
 use crate::security::SecurityGate;
 use crate::types::{
     AllowedUser, ChannelKind, ChatId, FormattedResponse, InboundMessage, MessageContext,
@@ -42,6 +42,31 @@ impl TelegramProvider {
             workspace,
             output_config,
         }
+    }
+}
+
+#[async_trait]
+impl ChannelProviderFactory for TelegramProvider {
+    async fn create(
+        ch_config: &ChannelConfig,
+        workspace: Arc<RwLock<WorkspaceHandle>>,
+        global_output: &Arc<OutputConfig>,
+    ) -> Result<Arc<dyn ChannelProvider>> {
+        let tmp = Self::new(
+            ch_config.token.clone(),
+            SecurityGate::new(Default::default()),
+            Arc::clone(&workspace),
+            Arc::clone(global_output),
+        );
+        let resolved = tmp.resolve_users(&ch_config.allowed_users).await?;
+        let gate = SecurityGate::new(resolved);
+        let effective_output = Arc::new(config::effective_output_config(global_output, ch_config));
+        Ok(Arc::new(Self::new(
+            ch_config.token.clone(),
+            gate,
+            workspace,
+            effective_output,
+        )))
     }
 }
 

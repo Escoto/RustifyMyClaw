@@ -8,11 +8,11 @@ Lightweight Rust daemon that bridges messaging platforms to local AI CLI tools.
 ```
 ┌──────────────┐
 │  Telegram    │──┐
-├──────────────┤  │     ┌─────────────────────────────────────────┐     ┌──────────────┐
-│  WhatsApp    │──┼────▶│                RustifyMyClaw            │────▶│  claude      │
-├──────────────┤  │     │  Security → Router → Executor → Format  │◀────│  codex       │
-│  Slack       │──┘     └─────────────────────────────────────────┘     │  gemini      │
-└──────────────┘                                                        └──────────────┘
+├──────────────┤  │      ┌─────────────────────────────────────────┐      ┌──────────────┐
+│  WhatsApp    │──┼────▶│                RustifyMyClaw            │────▶ │  claude      │
+├──────────────┤  │      │  Security → Router → Executor → Format  │◀─── │  codex       │
+│  Slack       │──┘      └─────────────────────────────────────────┘      │  gemini      │
+└──────────────┘                                                          └──────────────┘
 ```
 
 ## Why this exists
