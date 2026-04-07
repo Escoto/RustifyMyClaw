@@ -9,7 +9,6 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Json;
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
@@ -187,7 +186,6 @@ async fn handle_inbound(
                     chat_id,
                     user_id,
                     text: text_obj.body,
-                    timestamp: Utc::now(),
                     context: MessageContext {
                         workspace: Arc::clone(&state.workspace),
                         provider: Arc::clone(&state.provider),

@@ -18,7 +18,7 @@ fn wa_chat(id: &str) -> ChatId {
 #[test]
 fn fresh_chat_is_not_active() {
     let store = SessionStore::new();
-    assert!(!store.should_continue(&tg_chat("42")));
+    assert!(!store.get(&tg_chat("42")).is_active);
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn after_mark_active_should_continue() {
     let mut store = SessionStore::new();
     let id = tg_chat("42");
     store.mark_active(&id);
-    assert!(store.should_continue(&id));
+    assert!(store.get(&id).is_active);
 }
 
 #[test]
@@ -35,7 +35,7 @@ fn after_reset_is_not_active() {
     let id = tg_chat("42");
     store.mark_active(&id);
     store.reset(&id);
-    assert!(!store.should_continue(&id));
+    assert!(!store.get(&id).is_active);
 }
 
 #[test]
@@ -44,8 +44,8 @@ fn different_platforms_same_id_are_independent() {
     let tg = tg_chat("12345");
     let wa = wa_chat("12345");
     store.mark_active(&tg);
-    assert!(store.should_continue(&tg));
-    assert!(!store.should_continue(&wa));
+    assert!(store.get(&tg).is_active);
+    assert!(!store.get(&wa).is_active);
 }
 
 #[test]

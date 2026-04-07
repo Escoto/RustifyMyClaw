@@ -6,9 +6,9 @@ fn gate(ids: &[&str]) -> SecurityGate {
 
 #[test]
 fn allowed_user_passes() {
-    let g = gate(&["123456", "@user-x"]);
+    let g = gate(&["123456", "user-x"]);
     assert!(g.is_allowed("123456"));
-    assert!(g.is_allowed("@user-x"));
+    assert!(g.is_allowed("user-x"));
 }
 
 #[test]
@@ -26,6 +26,8 @@ fn empty_allowlist_blocks_all() {
 
 #[test]
 fn exact_match_required() {
-    let g = gate(&["@user-x"]);
-    assert!(!g.is_allowed("user-x"));
+    // Handles are normalized before entering the gate (no '@', lowercased).
+    let g = gate(&["user-x"]);
+    assert!(!g.is_allowed("@user-x")); // raw '@' form never matches
+    assert!(!g.is_allowed("User-X")); // case mismatch never matches
 }

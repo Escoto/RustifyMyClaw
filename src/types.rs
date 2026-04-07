@@ -44,8 +44,6 @@ pub struct InboundMessage {
     /// Platform-native user identifier as a string (for `SecurityGate` comparison and rate limiting).
     pub user_id: String,
     pub text: String,
-    #[allow(dead_code)] // reserved for future audit logging
-    pub timestamp: DateTime<Utc>,
     /// Routing context stamped by the channel listener at ingestion time.
     pub context: MessageContext,
 }
@@ -81,7 +79,7 @@ pub struct CliResponse {
     pub stdout: String,
     pub stderr: String,
     pub exit_code: i32,
-    #[allow(dead_code)] // reserved for future telemetry/metrics
+    #[allow(dead_code)] // TODO: telemetry/metrics
     pub duration: Duration,
 }
 

@@ -19,15 +19,6 @@ impl SessionStore {
         }
     }
 
-    /// Returns `true` if the conversation has an active session (should pass `--continue`).
-    #[allow(dead_code)] // Phase 1 scaffolding — used in tests and future pipeline stages
-    pub fn should_continue(&self, chat_id: &ChatId) -> bool {
-        self.sessions
-            .get(chat_id)
-            .map(|s| s.is_active)
-            .unwrap_or(false)
-    }
-
     /// Mark a session active after a successful prompt execution.
     pub fn mark_active(&mut self, chat_id: &ChatId) {
         let state = self.sessions.entry(chat_id.clone()).or_default();
