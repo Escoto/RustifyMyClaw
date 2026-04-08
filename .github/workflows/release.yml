@@ -92,22 +92,18 @@ jobs:
             runner: ubuntu-latest
             artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+x86_64-linux-gnu.tar.gz
             archive: tar.gz
-            use_cross: true
           - target: aarch64-apple-darwin
             runner: macos-latest
             artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+aarch64-apple-darwin.tar.gz
             archive: tar.gz
-            use_cross: false
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-latest
             artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+x86_64-apple-darwin.tar.gz
             archive: tar.gz
-            use_cross: false
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+x86_64-windows.zip
             archive: zip
-            use_cross: false
     runs-on: ${{ matrix.runner }}
     env:
       RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
@@ -123,16 +119,7 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install cross
-        if: matrix.use_cross
-        uses: taiki-e/install-action@cross
-
-      - name: Build (cross)
-        if: matrix.use_cross
-        run: cross build --release --locked --target ${{ matrix.target }}
-
-      - name: Build (cargo)
-        if: "!matrix.use_cross"
+      - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Package (tar.gz)
