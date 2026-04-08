@@ -11,7 +11,7 @@ RustifyMyClaw is a Rust daemon (edition 2021, stable toolchain) that bridges mes
 ```bash
 cargo build                    # debug build
 cargo build --release          # release build
-cargo test                     # all tests (125 expected)
+cargo test                     # all tests (127 expected)
 cargo test <module>            # single module, e.g. cargo test config
 cargo clippy -- -D warnings    # zero warnings policy
 cargo fmt --check              # format check
@@ -23,7 +23,8 @@ All four must pass before any commit.
 
 | File | Purpose |
 |------|---------|
-| `src/main.rs` | Entrypoint. Loads config, builds backends and channels, wires mpsc channels, starts signal handler and config watcher. |
+| `src/main.rs` | Entrypoint. Loads config, calls orchestration helpers from `startup.rs`, reads like a table of contents. |
+| `src/startup.rs` | Startup orchestration helpers: signal handler, rate limiter, workspace/backend/provider construction, router and provider spawning, config watcher, shutdown sequencing. |
 | `src/types.rs` | All canonical types: `ChatId`, `ChannelKind`, `AllowedUser`, `InboundMessage`, `MessageContext`, `WorkspaceHandle`, `CliResponse`, `SessionState`, `FormattedResponse`, `ResponseChunk`. |
 | `src/config.rs` | `AppConfig` struct hierarchy, YAML parsing, `${VAR}` env var interpolation, `validate()`, `effective_output_config()`, `diff_reload()`, `warn_misplaced_fields()`. |
 | `src/config_reload.rs` | `notify`-based file watcher. Debounced 300ms. Calls `load_from_path()` + `diff_reload()` + callback on change. |
@@ -46,7 +47,7 @@ All four must pass before any commit.
 
 ## Key patterns
 
-**Strategy — CLI backends.** `CliBackend` is the interface. `backend::build(name)` is the factory. `main.rs` builds one instance per distinct backend name, wraps each in `Arc`, and stores them in a `HashMap<String, Arc<dyn CliBackend>>`. The router looks up backends by name; it never allocates per-message.
+**Strategy — CLI backends.** `CliBackend` is the interface. `backend::build(name)` is the factory. `startup::build_workspaces()` builds one instance per distinct backend name, wraps each in `Arc`, and stores them in a `HashMap<String, Arc<dyn CliBackend>>`. The router looks up backends by name; it never allocates per-message.
 
 **Adapter — channel providers.** `ChannelProvider` normalizes Telegram/WhatsApp/Slack behind a common interface. The router and executor only see `InboundMessage` and `FormattedResponse`.
 
@@ -74,7 +75,7 @@ All four must pass before any commit.
 - Never call a real CLI in tests — use `MockBackend`.
 - No network or filesystem dependencies in tests. Mock everything external.
 - Deterministic only — no sleep-based timing, no random data without seeds.
-- Run the full suite with `cargo test` and confirm 125 tests pass before committing.
+- Run the full suite with `cargo test` and confirm 127 tests pass before committing.
 
 ## File guide
 

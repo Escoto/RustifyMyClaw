@@ -1,4 +1,4 @@
-.PHONY: push squash
+.PHONY: push squash pull
 
 push:
 ifndef m
@@ -15,3 +15,7 @@ endif
 	git reset --soft $$(git merge-base HEAD main)
 	git commit -m "$(m)"
 	git push --force
+
+pull:
+	git fetch
+	git pull
