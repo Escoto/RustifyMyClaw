@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: "Build artifacts but skip creating the GitHub Release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  determine_version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch all tags
+        run: git fetch --tags
+
+      - name: Calculate new version
+        id: bump
+        run: |
+          LATEST=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST" ]; then
+            LATEST="v0.0.0"
+          fi
+
+          MAJOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f3)
+
+          case "${{ inputs.bump }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumped $LATEST -> $NEW_VERSION"
+
+      - name: Validate Cargo.toml version
+        run: |
+          EXPECTED=$(echo "${{ steps.bump.outputs.new_version }}" | sed 's/^v//')
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$CARGO_VERSION" != "$EXPECTED" ]; then
+            echo "::error::Cargo.toml version ($CARGO_VERSION) does not match expected release version ($EXPECTED). Update Cargo.toml before releasing."
+            exit 1
+          fi
+
+  build:
+    needs: determine_version
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+x86_64-linux-gnu.tar.gz
+            archive: tar.gz
+            use_cross: true
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+aarch64-apple-darwin.tar.gz
+            archive: tar.gz
+            use_cross: false
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+x86_64-apple-darwin.tar.gz
+            archive: tar.gz
+            use_cross: false
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            artifact: rustifymyclaw-${{ needs.determine_version.outputs.new_version }}+x86_64-windows.zip
+            archive: zip
+            use_cross: false
+    runs-on: ${{ matrix.runner }}
+    env:
+      RUSTFLAGS: ${{ matrix.target == 'x86_64-pc-windows-msvc' && '-C target-feature=+crt-static' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        uses: taiki-e/install-action@cross
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Build (cargo)
+        if: "!matrix.use_cross"
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: tar czvf ${{ matrix.artifact }} -C target/${{ matrix.target }}/release rustifymyclaw
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        run: 7z a ${{ matrix.artifact }} ./target/${{ matrix.target }}/release/rustifymyclaw.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: [determine_version, build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: |
+          for file in *; do
+            sha256sum "$file" > "${file}.sha256"
+          done
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ needs.determine_version.outputs.new_version }}
+          git push origin ${{ needs.determine_version.outputs.new_version }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.determine_version.outputs.new_version }}
+          name: RustifyMyClaw ${{ needs.determine_version.outputs.new_version }}
+          generate_release_notes: true
+          draft: false
+          files: artifacts/*
