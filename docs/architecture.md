@@ -97,7 +97,7 @@ graph TD
 | Channel `start()` signature | `&self` + separate `self_arc: Arc<dyn ChannelProvider>` argument | Polling closures need owned captures. A borrow doesn't live long enough; passing `Arc` explicitly avoids self-referential struct construction. |
 | Backend instantiation | One instance per distinct backend name, stored in `HashMap<String, Arc<dyn CliBackend>>` | No duplicate allocations when multiple workspaces share a backend. |
 | Config hot-reload | Rate limits apply immediately; all other changes require restart | Channel connections and security gates are constructed once at startup. Hot-patching them adds complexity without much operational value. |
-| Channel construction | `ChannelProviderFactory` trait + `channel::build()` dispatch | Each provider owns its config validation and two-phase `SecurityGate` construction. `main.rs` calls a single factory function per channel. |
+| Channel construction | `ChannelProviderFactory` trait + `channel::build()` dispatch | Each provider owns its config validation and user resolution. `main.rs` calls a single factory function per channel. |
 
 ## Extension Points
 
@@ -128,7 +128,6 @@ pub trait ChannelProvider: Send + Sync {
         shutdown: CancellationToken,
     ) -> Result<()>;
     async fn send_response(&self, chat_id: &ChatId, response: FormattedResponse) -> Result<()>;
-    async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>>;
 }
 
 pub trait ChannelProviderFactory: ChannelProvider + Sized {
@@ -140,7 +139,13 @@ pub trait ChannelProviderFactory: ChannelProvider + Sized {
 }
 ```
 
-`ChannelProviderFactory::create()` encapsulates the two-phase construction pattern: build a temporary provider with a dummy `SecurityGate` to call `resolve_users()`, then build the real provider with the resolved gate and effective output config. Each provider validates its own config fields inside `create()`.
+Each provider module defines a `resolve_users` function (free function, not a trait method) to convert `AllowedUser` config entries into platform-native ID strings:
+
+- **Telegram** (`telegram::resolve_users`) — synchronous. Strips `@` prefix, lowercases handles.
+- **WhatsApp** (`whatsapp::resolve_users`) — synchronous. Passes phone numbers through, warns on numeric IDs.
+- **Slack** (`slack::resolve_users`) — async. Passes raw user IDs (`U…`/`W…`) through, hits `users.list` API for handle resolution.
+
+`ChannelProviderFactory::create()` calls the module's `resolve_users` function, builds `SecurityGate::new(resolved)`, computes the effective output config, then constructs the provider once. No temporary instances, no dummy gates.
 
 The `self_arc` parameter on `start()` exists because polling closures need owned captures of the provider. Pass it through to any closure that stamps `MessageContext`.
 
