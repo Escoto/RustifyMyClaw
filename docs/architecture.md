@@ -54,10 +54,13 @@ A message from Telegram to a response back:
 
 ```mermaid
 graph TD
+    main --> startup[startup — orchestration helpers]
     main --> config
-    main --> router
-    main --> channel_mod[channel/mod — ChannelProvider + factory]
-    main --> config_reload
+
+    startup --> router
+    startup --> channel_mod[channel/mod — ChannelProvider + factory]
+    startup --> config_reload
+    startup --> backend_mod
 
     channel_mod --> channel_telegram[channel/telegram]
     channel_mod --> channel_whatsapp[channel/whatsapp]
@@ -149,7 +152,7 @@ Each provider module defines a `resolve_users` function (free function, not a tr
 
 The `self_arc` parameter on `start()` exists because polling closures need owned captures of the provider. Pass it through to any closure that stamps `MessageContext`.
 
-`channel::build()` dispatches by kind string and is the single entry point called from `main.rs`.
+`channel::build()` dispatches by kind string and is the single entry point called from `startup::build_workspaces()`.
 
 ### Adding a new command
 
