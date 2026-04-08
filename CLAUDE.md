@@ -106,10 +106,10 @@ cargo fmt --check              # format check
 ## How to Add a New Channel Provider
 
 1. Create `src/channel/<name>.rs` with a struct that implements `ChannelProvider` and `ChannelProviderFactory`.
-2. Implement `ChannelProviderFactory::create(ch_config, workspace, global_output)` — validate provider-specific config fields, build a temporary provider with a dummy `SecurityGate` to call `resolve_users`, then build the real provider with the resolved gate and effective output config.
-3. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, stamp each message with `MessageContext`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
-4. Implement `send_response(&self, chat_id, response)` — deliver each `ResponseChunk` to the platform.
-5. Implement `resolve_users(&self, users)` — convert `AllowedUser` entries to platform-native ID strings for `SecurityGate`.
+2. Add a module-level `resolve_users(users: &[AllowedUser]) -> Result<HashSet<String>>` function (or `async fn` if network I/O is needed) — convert `AllowedUser` entries to platform-native ID strings for `SecurityGate`. See `docs/architecture.md` for examples.
+3. Implement `ChannelProviderFactory::create(ch_config, workspace, global_output)` — validate provider-specific config fields, call `resolve_users(&ch_config.allowed_users)`, build `SecurityGate::new(resolved)`, compute effective output config, then construct the provider once.
+4. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, stamp each message with `MessageContext`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
+5. Implement `send_response(&self, chat_id, response)` — deliver each `ResponseChunk` to the platform.
 6. Stamp `MessageContext` at ingestion: `workspace: Arc<WorkspaceHandle>`, `provider: self_arc.clone()`, `output_config: Arc::new(effective_output_config(global, channel_cfg))`.
 7. Add `pub mod <name>;` in `src/channel/mod.rs`.
 8. Add the kind string to `KNOWN_CHANNELS` in `src/config.rs`.

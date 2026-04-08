@@ -109,6 +109,7 @@ impl SlackProvider {
         security_gate: SecurityGate,
         workspace: Arc<RwLock<WorkspaceHandle>>,
         output_config: Arc<OutputConfig>,
+        http_client: reqwest::Client,
     ) -> Self {
         Self {
             bot_token,
@@ -117,7 +118,7 @@ impl SlackProvider {
             security_gate,
             workspace,
             output_config,
-            http_client: reqwest::Client::new(),
+            http_client,
             thread_map: RwLock::new(HashMap::new()),
         }
     }
@@ -135,16 +136,10 @@ impl ChannelProviderFactory for SlackProvider {
             .clone()
             .context("slack channel requires `app_token` (xapp-…)")?;
         let use_threads = ch_config.use_threads.unwrap_or(false);
+        let http_client = reqwest::Client::new();
 
-        let tmp = Self::new(
-            ch_config.token.clone(),
-            app_token.clone(),
-            use_threads,
-            SecurityGate::new(Default::default()),
-            Arc::clone(&workspace),
-            Arc::clone(global_output),
-        );
-        let resolved = tmp.resolve_users(&ch_config.allowed_users).await?;
+        let resolved =
+            resolve_users(&ch_config.allowed_users, &ch_config.token, &http_client).await?;
         let gate = SecurityGate::new(resolved);
         let effective_output = Arc::new(config::effective_output_config(global_output, ch_config));
         Ok(Arc::new(Self::new(
@@ -154,6 +149,7 @@ impl ChannelProviderFactory for SlackProvider {
             gate,
             workspace,
             effective_output,
+            http_client,
         )))
     }
 }
@@ -407,111 +403,117 @@ impl ChannelProvider for SlackProvider {
         }
         Ok(())
     }
-
-    async fn resolve_users(&self, users: &[AllowedUser]) -> Result<HashSet<String>> {
-        if users.is_empty() {
-            bail!("slack channel must have at least one allowed_user");
-        }
-
-        // Separate handles from raw user IDs. User IDs (U…) pass through directly.
-        let mut resolved = HashSet::new();
-        let mut handles_to_lookup: Vec<String> = Vec::new();
-
-        for user in users {
-            match user {
-                AllowedUser::Handle(h) if h.starts_with('U') || h.starts_with('W') => {
-                    // Looks like a raw Slack user ID — use directly.
-                    resolved.insert(h.clone());
-                }
-                AllowedUser::Handle(h) => {
-                    let stripped = h.trim_start_matches('@').to_string();
-                    handles_to_lookup.push(stripped);
-                }
-                AllowedUser::NumericId(id) => {
-                    tracing::warn!(
-                        id,
-                        "numeric IDs are not valid Slack identifiers; \
-                         use @handles or Slack user IDs like U01ABC123"
-                    );
-                }
-            }
-        }
-
-        if handles_to_lookup.is_empty() {
-            return Ok(resolved);
-        }
-
-        // Fetch all workspace members (with cursor-based pagination) and build a name→id map.
-        let name_to_id = self.fetch_all_slack_users().await?;
-
-        for handle in &handles_to_lookup {
-            match name_to_id.get(handle.as_str()) {
-                Some(id) => {
-                    resolved.insert(id.clone());
-                }
-                None => {
-                    bail!(
-                        "Slack user `@{handle}` not found in workspace — \
-                         check the handle or use the raw user ID (U…)"
-                    );
-                }
-            }
-        }
-
-        Ok(resolved)
-    }
 }
 
-impl SlackProvider {
-    /// Fetch all (non-deleted) workspace users via paginated `users.list` calls.
-    async fn fetch_all_slack_users(&self) -> Result<HashMap<String, String>> {
-        let mut name_to_id: HashMap<String, String> = HashMap::new();
-        let mut cursor: Option<String> = None;
+/// Resolve Slack [`AllowedUser`] entries into platform-native user ID strings
+/// suitable for [`SecurityGate`] comparison.
+///
+/// Raw Slack user IDs (`U…` / `W…`) pass through directly. Handles (`@name`)
+/// are resolved against the workspace member list via the Slack Web API.
+pub async fn resolve_users(
+    users: &[AllowedUser],
+    bot_token: &str,
+    http_client: &reqwest::Client,
+) -> Result<HashSet<String>> {
+    if users.is_empty() {
+        bail!("slack channel must have at least one allowed_user");
+    }
 
-        loop {
-            let mut req = self
-                .http_client
-                .get(format!("{SLACK_API_BASE}/users.list"))
-                .bearer_auth(&self.bot_token)
-                .query(&[("limit", "200")]);
+    let mut resolved = HashSet::new();
+    let mut handles_to_lookup: Vec<String> = Vec::new();
 
-            if let Some(ref c) = cursor {
-                req = req.query(&[("cursor", c.as_str())]);
+    for user in users {
+        match user {
+            AllowedUser::Handle(h) if h.starts_with('U') || h.starts_with('W') => {
+                resolved.insert(h.clone());
             }
-
-            let resp: UsersListResponse = req
-                .send()
-                .await
-                .context("failed to call Slack users.list")?
-                .json()
-                .await
-                .context("failed to parse Slack users.list response")?;
-
-            if !resp.ok {
-                bail!(
-                    "Slack users.list failed: {}",
-                    resp.error.as_deref().unwrap_or("unknown error")
+            AllowedUser::Handle(h) => {
+                let stripped = h.trim_start_matches('@').to_string();
+                handles_to_lookup.push(stripped);
+            }
+            AllowedUser::NumericId(id) => {
+                tracing::warn!(
+                    id,
+                    "numeric IDs are not valid Slack identifiers; \
+                     use @handles or Slack user IDs like U01ABC123"
                 );
             }
+        }
+    }
 
-            for member in resp.members.unwrap_or_default() {
-                if !member.deleted {
-                    name_to_id.insert(member.name, member.id);
-                }
+    if handles_to_lookup.is_empty() {
+        return Ok(resolved);
+    }
+
+    let name_to_id = fetch_all_slack_users(bot_token, http_client).await?;
+
+    for handle in &handles_to_lookup {
+        match name_to_id.get(handle.as_str()) {
+            Some(id) => {
+                resolved.insert(id.clone());
             }
+            None => {
+                bail!(
+                    "Slack user `@{handle}` not found in workspace — \
+                     check the handle or use the raw user ID (U…)"
+                );
+            }
+        }
+    }
 
-            cursor = resp
-                .metadata
-                .and_then(|m| m.next_cursor)
-                .filter(|c| !c.is_empty());
+    Ok(resolved)
+}
 
-            if cursor.is_none() {
-                break;
+/// Fetch all (non-deleted) workspace users via paginated `users.list` calls.
+async fn fetch_all_slack_users(
+    bot_token: &str,
+    http_client: &reqwest::Client,
+) -> Result<HashMap<String, String>> {
+    let mut name_to_id: HashMap<String, String> = HashMap::new();
+    let mut cursor: Option<String> = None;
+
+    loop {
+        let mut req = http_client
+            .get(format!("{SLACK_API_BASE}/users.list"))
+            .bearer_auth(bot_token)
+            .query(&[("limit", "200")]);
+
+        if let Some(ref c) = cursor {
+            req = req.query(&[("cursor", c.as_str())]);
+        }
+
+        let resp: UsersListResponse = req
+            .send()
+            .await
+            .context("failed to call Slack users.list")?
+            .json()
+            .await
+            .context("failed to parse Slack users.list response")?;
+
+        if !resp.ok {
+            bail!(
+                "Slack users.list failed: {}",
+                resp.error.as_deref().unwrap_or("unknown error")
+            );
+        }
+
+        for member in resp.members.unwrap_or_default() {
+            if !member.deleted {
+                name_to_id.insert(member.name, member.id);
             }
         }
 
-        Ok(name_to_id)
+        cursor = resp
+            .metadata
+            .and_then(|m| m.next_cursor)
+            .filter(|c| !c.is_empty());
+
+        if cursor.is_none() {
+            break;
+        }
     }
+
+    Ok(name_to_id)
 }
 
 /// Build the ack JSON for a Socket Mode envelope.
