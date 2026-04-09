@@ -4,16 +4,30 @@ RustifyMyClaw is a Rust daemon that bridges messaging platforms to local AI CLI 
 
 ## System Overview
 
-```
-┌──────────────┐
-│  Telegram    │──┐
-├──────────────┤  │      ┌─────────────────────────────────────────┐       ┌──────────────┐
-│  WhatsApp    │──┼───▶ │                RustifyMyClaw             │────▶ │  claude      │
-├──────────────┤  │      │  Security → Router → Executor → Format  │◀──── │  codex       │
-│  Slack       │──┘      └─────────────────────────────────────────┘       │  gemini      │
-└──────────────┘                        ▲                                  └──────────────┘
-                                        │
-                               ~/.rustifymyclaw/config.yaml
+```mermaid
+flowchart LR
+    classDef channel fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#1e293b
+    classDef core fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#1e293b
+    classDef backend fill:#d1fae5,stroke:#10b981,stroke-width:2px,color:#1e293b
+
+    subgraph Channels [" Messaging Platforms "]
+        direction TB
+        T[Telegram]:::channel
+        W[WhatsApp]:::channel
+        S[Slack]:::channel
+    end
+
+    RMC(["RustifyMyClaw\n<hr/>Security → Router → Executor → Format"]):::core
+
+    subgraph Backends [" AI CLI Tools "]
+        direction TB
+        C[claude]:::backend
+        X[codex]:::backend
+        G[gemini]:::backend
+    end
+
+    T & W & S <--> RMC
+    RMC <--> C & X & G
 ```
 
 ## Components
