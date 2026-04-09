@@ -1,4 +1,4 @@
-.PHONY: push squash pull
+.PHONY: push squash pull run
 
 push:
 ifndef m
@@ -19,3 +19,7 @@ endif
 pull:
 	git fetch
 	git pull
+
+run:
+	cargo build --release
+	./target/release/rustifymyclaw

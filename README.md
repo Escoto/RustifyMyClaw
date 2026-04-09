@@ -21,20 +21,36 @@ AI CLI tools are powerful but terminal-bound. RustifyMyClaw lets you use them fr
 
 ## Quickstart
 
+### Build from source
+
+[docs/building-from-source](docs/building-from-source.md)
+
+### Install
+
+**Linux / macOS:**
+
 ```bash
-git clone https://github.com/Escoto/RustifyMyClaw.git
-cd RustifyMyClaw
-cargo build --release
-
-mkdir -p ~/.rustifymyclaw
-cp examples/config.yaml ~/.rustifymyclaw/config.yaml
-# Edit config.yaml: set your directory, tokens, and allowed_users
-export TELEGRAM_BOT_TOKEN=your_token_here
-
-./target/release/rustifymyclaw
+curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash
 ```
 
-Full setup details: [docs/configuration.md](docs/configuration.md)
+**Windows (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.ps1 | iex
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash -s -- v0.1.0
+```
+
+The installer downloads the binary, verifies its SHA256 checksum, creates a starter `config.yaml`, and adds it to your PATH. 
+
+> [!IMPORTANT]
+> You must update the starter **config.yaml**:
+> * %APPDATA%\RustifyMyClaw
+> * ~/.rustifymyclaw
 
 ## Configuration
 
@@ -49,7 +65,7 @@ workspaces:
       - kind: telegram
         token: "${TELEGRAM_BOT_TOKEN}"
         allowed_users:
-          - 123456789
+          - "@your_handle"
 
 output:
   max_message_chars: 4000
@@ -57,7 +73,7 @@ output:
   chunk_strategy: "natural"
 ```
 
-Tokens are never hardcoded — use `${ENV_VAR}` interpolation. Full reference: [docs/configuration.md](docs/configuration.md)
+Tokens are never hardcoded — use `${ENV_VAR}` interpolation. Full reference: [docs/configuration](docs/configuration.md)
 
 ## Backends
 
