@@ -3,17 +3,8 @@
 [![CI](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Lightweight Rust daemon that bridges messaging platforms to local AI CLI tools.
+Lightweight Rust proxy that bridges messaging platforms to local AI CLI tools.
 
-```
-┌──────────────┐
-│  Telegram    │──┐
-├──────────────┤  │      ┌─────────────────────────────────────────┐      ┌──────────────┐
-│  WhatsApp    │──┼────▶│                RustifyMyClaw            │────▶ │  claude      │
-├──────────────┤  │      │  Security → Router → Executor → Format  │◀─── │  codex       │
-│  Slack       │──┘      └─────────────────────────────────────────┘      │  gemini      │
-└──────────────┘                                                          └──────────────┘
-```
 
 ## Why this exists
 
