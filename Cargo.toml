@@ -1,6 +1,6 @@
 [package]
 name = "rustifymyclaw"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Proxy bridging messaging platforms to local AI CLI tools."
 
