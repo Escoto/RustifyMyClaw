@@ -95,11 +95,6 @@ pub fn effective_output_config(global: &OutputConfig, channel: &ChannelConfig) -
     }
 }
 
-/// Load and validate config from the default platform path.
-pub fn load() -> Result<AppConfig> {
-    load_from_path(&dirs_path())
-}
-
 /// Load and validate config from an explicit path.
 ///
 /// Used by both `load()` (startup) and the config hot-reload watcher.

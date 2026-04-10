@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
 mod backend;
 mod channel;
+mod cli;
 mod command;
 mod config;
 mod config_reload;
@@ -26,14 +28,26 @@ use crate::startup::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .init();
+    let args = cli::Cli::parse();
 
-    let app_config = config::load().context("failed to load configuration")?;
+    let log_filter = args
+        .log_level
+        .as_deref()
+        .map(tracing_subscriber::EnvFilter::new)
+        .or_else(|| tracing_subscriber::EnvFilter::try_from_default_env().ok())
+        .unwrap_or_else(|| tracing_subscriber::EnvFilter::new("info"));
+
+    tracing_subscriber::fmt().with_env_filter(log_filter).init();
+
+    let config_path = args.config.unwrap_or_else(config::dirs_path);
+
+    let app_config =
+        config::load_from_path(&config_path).context("failed to load configuration")?;
+
+    if args.validate {
+        tracing::info!(path = %config_path.display(), "configuration is valid");
+        return Ok(());
+    }
 
     let shutdown = CancellationToken::new();
     spawn_signal_handler(shutdown.clone());

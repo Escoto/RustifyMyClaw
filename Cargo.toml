@@ -2,6 +2,7 @@
 name = "rustifymyclaw"
 version = "0.1.0"
 edition = "2021"
+description = "Proxy bridging messaging platforms to local AI CLI tools."
 
 [[bin]]
 name = "rustifymyclaw"
@@ -26,6 +27,7 @@ futures-util = "0.3"
 serde_json = "1"
 tokio-util = { version = "0.7", features = ["rt"] }
 notify = "6"
+clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
