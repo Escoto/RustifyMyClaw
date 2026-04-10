@@ -39,15 +39,13 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt().with_env_filter(log_filter).init();
 
-    let config_path = args.config.unwrap_or_else(config::dirs_path);
-
-    let app_config =
-        config::load_from_path(&config_path).context("failed to load configuration")?;
-
-    if args.validate {
-        tracing::info!(path = %config_path.display(), "configuration is valid");
+    if cli::run_command(&args)? {
         return Ok(());
     }
+
+    let config_path = args.config_file.unwrap_or_else(config::dirs_path);
+    let app_config =
+        config::load_from_path(&config_path).context("failed to load configuration")?;
 
     let shutdown = CancellationToken::new();
     spawn_signal_handler(shutdown.clone());
