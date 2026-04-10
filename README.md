@@ -1,7 +1,10 @@
 # RustifyMyClaw
 
 [![CI](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/Escoto/RustifyMyClaw)](https://github.com/Escoto/RustifyMyClaw/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Escoto/RustifyMyClaw/total)](https://github.com/Escoto/RustifyMyClaw/releases)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Made with Rust](https://img.shields.io/badge/Made%20with-Rust-orange?logo=rust)](https://www.rust-lang.org)
 
 Lightweight Rust proxy that bridges messaging platforms to local AI CLI tools.
 
