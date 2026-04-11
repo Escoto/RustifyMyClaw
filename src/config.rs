@@ -95,6 +95,27 @@ pub fn effective_output_config(global: &OutputConfig, channel: &ChannelConfig) -
     }
 }
 
+/// Resolve the config file path using the priority chain:
+/// 1. Explicit CLI flag (`-f` / `--config-file`)
+/// 2. `RUSTIFYMYCLAW_CONFIG` environment variable
+/// 3. `./config.yaml` in the current working directory (only if the file exists)
+/// 4. Platform default ([`dirs_path`])
+pub fn resolve_path(cli_override: Option<PathBuf>) -> PathBuf {
+    if let Some(p) = cli_override {
+        return p;
+    }
+    if let Ok(env_path) = std::env::var("RUSTIFYMYCLAW_CONFIG") {
+        if !env_path.is_empty() {
+            return PathBuf::from(env_path);
+        }
+    }
+    let cwd_candidate = PathBuf::from("config.yaml");
+    if cwd_candidate.exists() {
+        return cwd_candidate;
+    }
+    dirs_path()
+}
+
 /// Load and validate config from an explicit path.
 ///
 /// Used by both `load()` (startup) and the config hot-reload watcher.

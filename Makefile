@@ -1,4 +1,4 @@
-.PHONY: build pull push run squash
+.PHONY: build pull push qa run squash
 
 build:
 	rustc --version
@@ -27,3 +27,8 @@ endif
 	git reset --soft $$(git merge-base HEAD main)
 	git commit -m "$(m)"
 	git push --force
+
+qa:
+	cargo fmt
+	cargo clippy -- -D warnings
+	cargo test

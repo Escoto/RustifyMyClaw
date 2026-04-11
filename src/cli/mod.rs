@@ -39,7 +39,7 @@ pub enum Command {
 /// Run a subcommand if present. Returns `true` if a subcommand was handled
 /// (caller should exit), `false` if the daemon should start normally.
 pub fn run_command(cli: &Cli) -> Result<bool> {
-    let config_path = cli.config_file.clone().unwrap_or_else(config::dirs_path);
+    let config_path = config::resolve_path(cli.config_file.clone());
 
     if cli.validate {
         config::load_from_path(&config_path)?;

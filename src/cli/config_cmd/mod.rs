@@ -46,7 +46,7 @@ pub fn run(action: &ConfigAction, config_path: &Path) -> Result<()> {
     match action {
         ConfigAction::Show => show::run(config_path),
         ConfigAction::Validate => validate::run(config_path),
-        ConfigAction::Path => path::run(),
+        ConfigAction::Path => path::run(config_path),
         ConfigAction::Init { file, dir } => init::run(file.as_deref(), dir.as_deref(), config_path),
         ConfigAction::Get { key } => get::run(config_path, key),
         ConfigAction::Set { key, value } => set::run(config_path, key, value),

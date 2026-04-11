@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::*;
 
 fn default_output() -> OutputConfig {
@@ -369,4 +371,55 @@ fn diff_reload_does_not_panic_on_limits_change() {
         window_seconds: 30,
     });
     diff_reload(&old, &new);
+}
+
+// ─── resolve_path ───────────────────────────────────────────────────────────
+
+#[test]
+fn resolve_path_prefers_cli_flag() {
+    let result = resolve_path(Some(PathBuf::from("/explicit/config.yaml")));
+    assert_eq!(result, PathBuf::from("/explicit/config.yaml"));
+}
+
+#[test]
+fn resolve_path_uses_env_var_when_no_cli_flag() {
+    let key = "RUSTIFYMYCLAW_CONFIG";
+    std::env::set_var(key, "/from/env/config.yaml");
+    let result = resolve_path(None);
+    std::env::remove_var(key);
+    assert_eq!(result, PathBuf::from("/from/env/config.yaml"));
+}
+
+#[test]
+fn resolve_path_ignores_empty_env_var() {
+    let key = "RUSTIFYMYCLAW_CONFIG";
+    std::env::set_var(key, "");
+    let result = resolve_path(None);
+    std::env::remove_var(key);
+    // Should fall through to CWD check or dirs_path, never return empty.
+    assert_ne!(result, PathBuf::from(""));
+}
+
+#[test]
+fn resolve_path_cli_flag_overrides_env_var() {
+    let key = "RUSTIFYMYCLAW_CONFIG";
+    std::env::set_var(key, "/from/env/config.yaml");
+    let result = resolve_path(Some(PathBuf::from("/cli/path.yaml")));
+    std::env::remove_var(key);
+    assert_eq!(result, PathBuf::from("/cli/path.yaml"));
+}
+
+#[test]
+fn resolve_path_falls_back_to_dirs_path() {
+    let key = "RUSTIFYMYCLAW_CONFIG";
+    std::env::remove_var(key);
+    // When no CLI flag, no env var, and no ./config.yaml in CWD,
+    // resolve_path should return the platform default.
+    let result = resolve_path(None);
+    // The fallback is dirs_path() — at minimum it ends with config.yaml.
+    assert!(
+        result.ends_with("config.yaml"),
+        "expected path ending in config.yaml, got: {}",
+        result.display()
+    );
 }
