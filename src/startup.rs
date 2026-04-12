@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -160,11 +161,11 @@ pub(crate) fn spawn_providers(
 ///
 /// `config_baseline` is consumed by the reload diff closure.
 pub(crate) fn spawn_config_watcher(
+    config_path: PathBuf,
     config_baseline: config::AppConfig,
     shutdown: CancellationToken,
     rate_limiter_shared: SharedRateLimiter,
 ) {
-    let config_path = config::dirs_path();
     tokio::spawn(async move {
         if let Err(e) = config_reload::watch(
             config_path,

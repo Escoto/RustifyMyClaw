@@ -43,7 +43,8 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let config_path = args.config_file.unwrap_or_else(config::dirs_path);
+    let config_path = config::resolve_path(args.config_file);
+    tracing::info!(path = %config_path.display(), "resolved config path");
     let app_config =
         config::load_from_path(&config_path).context("failed to load configuration")?;
 
@@ -71,7 +72,7 @@ async fn main() -> Result<()> {
     );
     let provider_handles = spawn_providers(providers, tx, shutdown.clone());
 
-    spawn_config_watcher(app_config, shutdown, rate_limiter_shared);
+    spawn_config_watcher(config_path, app_config, shutdown, rate_limiter_shared);
 
     await_shutdown(provider_handles, router_handle).await;
     Ok(())

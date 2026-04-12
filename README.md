@@ -99,9 +99,19 @@ Or [build from source](docs/building-from-source.md).
 
 ### 2. Configure
 
-Edit the starter `config.yaml` created by the installer:
+Generate a starter config with `config init`:
+
+```bash
+rustifymyclaw config init                # writes to default platform location
+rustifymyclaw config init -d .           # writes config.yaml in current directory
+rustifymyclaw config init -f my.yaml     # writes to a specific file path
+```
+
+Default locations:
 - **Linux / macOS:** `~/.rustifymyclaw/config.yaml`
 - **Windows:** `%APPDATA%\RustifyMyClaw\config.yaml`
+
+RustifyMyClaw auto-discovers `config.yaml` in the current directory, so `config init -d .` followed by `rustifymyclaw` just works. See [docs/configuration.md](docs/configuration.md) for the full resolution chain.
 
 Minimal example:
 
@@ -117,7 +127,7 @@ workspaces:
           - "@your_handle"
 
 output:
-  max_message_chars: 4000
+  max_message_chars: 600
   file_upload_threshold_bytes: 51200
   chunk_strategy: "natural"
 ```
@@ -125,6 +135,8 @@ output:
 Tokens are never hardcoded — use `${ENV_VAR}` interpolation. Full reference: [docs/configuration.md](docs/configuration.md)
 
 ### 3. Run
+
+Use default config location OR current directory when `config.yaml` is present:
 
 ```bash
 rustifymyclaw
