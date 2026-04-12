@@ -1,6 +1,17 @@
 # Configuration Reference
 
-Config lives at `~/.rustifymyclaw/config.yaml` on Unix and `%APPDATA%\RustifyMyClaw\config.yaml` on Windows.
+## Config file resolution
+
+RustifyMyClaw resolves the config path using this priority chain:
+
+| Priority | Source | Example |
+|----------|--------|---------|
+| 1 | `-f` / `--config-file` CLI flag | `rustifymyclaw -f ./my-config.yaml` |
+| 2 | `RUSTIFYMYCLAW_CONFIG` environment variable | `export RUSTIFYMYCLAW_CONFIG=~/projects/config.yaml` |
+| 3 | `./config.yaml` in the current working directory | `cd my-project && rustifymyclaw` |
+| 4 | Platform default | `~/.rustifymyclaw/config.yaml` (Unix) or `%APPDATA%\RustifyMyClaw\config.yaml` (Windows) |
+
+The first match wins. Use `rustifymyclaw config path` to see which path would be used from your current directory.
 
 ## Full annotated example
 

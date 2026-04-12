@@ -32,7 +32,7 @@ flowchart LR
 
 ## Components
 
-**Config Loader** (`src/config.rs`) — Reads `~/.rustifymyclaw/config.yaml` at startup, replaces `${VAR}` patterns with environment variables, validates the result, and exposes typed structs to the rest of the program. Also handles config hot-reload diffing via `diff_reload()`.
+**Config Loader** (`src/config.rs`) — Resolves the config path via a priority chain (CLI `-f` flag → `RUSTIFYMYCLAW_CONFIG` env var → `./config.yaml` in CWD → platform default), replaces `${VAR}` patterns with environment variables, validates the result, and exposes typed structs to the rest of the program. Also handles config hot-reload diffing via `diff_reload()`. See [docs/configuration.md](configuration.md) for the full resolution chain.
 
 **SecurityGate** (`src/security.rs`) — One instance per channel. Holds a `HashSet<String>` of resolved, platform-native user IDs. Every inbound message is checked here before entering the pipeline. Unauthorized messages are silently dropped.
 
