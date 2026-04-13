@@ -1,0 +1,65 @@
+name: Publish
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Release version tag (e.g., v0.1.2)"
+        required: true
+        type: string
+
+jobs:
+  publish-crate:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-choco:
+    runs-on: windows-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version variables
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.version }}"
+          $semver = $tag -replace '^v', ''
+          $artifact = "rustifymyclaw-${tag}+x86_64-windows.zip"
+          $url = "https://github.com/${{ github.repository }}/releases/download/${tag}/${artifact}"
+          echo "CHOCO_VERSION=$semver" >> $env:GITHUB_ENV
+          echo "ARTIFACT_NAME=$artifact" >> $env:GITHUB_ENV
+          echo "DOWNLOAD_URL=$url" >> $env:GITHUB_ENV
+
+      - name: Download release artifact
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri $env:DOWNLOAD_URL -OutFile $env:ARTIFACT_NAME -UseBasicParsing
+
+      - name: Compute SHA256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Path $env:ARTIFACT_NAME -Algorithm SHA256).Hash.ToLower()
+          echo "CHECKSUM=$hash" >> $env:GITHUB_ENV
+
+      - name: Inject version and checksum into install script
+        shell: pwsh
+        run: |
+          $script = 'choco/tools/chocolateyInstall.ps1'
+          $content = Get-Content $script -Raw
+          $content = $content -replace '\{\{VERSION\}\}', "${{ inputs.version }}"
+          $content = $content -replace '\{\{CHECKSUM\}\}', $env:CHECKSUM
+          Set-Content $script $content
+
+      - name: Pack Chocolatey package
+        run: choco pack choco/rustifymyclaw.nuspec --version ${{ env.CHOCO_VERSION }}
+        working-directory: .
+
+      - name: Push to Chocolatey
+        run: choco push rustifymyclaw.${{ env.CHOCO_VERSION }}.nupkg --source https://push.chocolatey.org/ --api-key ${{ secrets.CHOCO_API_KEY }}

@@ -44,6 +44,10 @@ All four must pass before any commit.
 | `src/channel/whatsapp.rs` | `WhatsAppProvider` — axum webhook + reqwest Graph API. |
 | `src/channel/slack.rs` | `SlackProvider` — Socket Mode WebSocket via tokio-tungstenite. |
 | `src/tests/` | All test files, referenced from source via `#[path = "tests/..."]`. |
+| `choco/` | Chocolatey package: `rustifymyclaw.nuspec`, `tools/chocolateyInstall.ps1`, `tools/chocolateyUninstall.ps1`. |
+| `.github/workflows/ci.yml` | CI: fmt, clippy, test on push/PR. |
+| `.github/workflows/release.yml` | Release: version bump, cross-platform build, GH Release, then calls `publish.yml`. |
+| `.github/workflows/publish.yml` | Reusable workflow (`workflow_call`): parallel crates.io + Chocolatey publish. |
 
 ## Key patterns
 
@@ -87,3 +91,5 @@ All four must pass before any commit.
 | `examples/config.yaml` | Minimal working config for quickstart. |
 | `desired_architecture.md` | Internal planning history. Do not reference in public docs or PRs. |
 | `CONTRIBUTING.md` | How to contribute — branch conventions, PR process, testing expectations. |
+| `.github/workflows/` | CI, release, and publish pipelines. |
+| `choco/` | Chocolatey packaging (nuspec + install/uninstall scripts). |

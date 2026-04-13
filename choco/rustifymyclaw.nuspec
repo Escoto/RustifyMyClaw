@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>rustifymyclaw</id>
+    <version>$version$</version>
+    <title>RustifyMyClaw</title>
+    <authors>Escoto</authors>
+    <owners>Escoto</owners>
+    <licenseUrl>https://github.com/Escoto/RustifyMyClaw/blob/main/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/Escoto/RustifyMyClaw</projectUrl>
+    <projectSourceUrl>https://github.com/Escoto/RustifyMyClaw</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/Escoto/RustifyMyClaw/issues</bugTrackerUrl>
+    <tags>rust cli-agent ai-tool claw claude-code codex</tags>
+    <summary>Run Coding CLI Agents from Messaging Apps</summary>
+    <description>Run Coding CLI Agents from Messaging Apps - single Rust binary, no server required.</description>
+    <releaseNotes>https://github.com/Escoto/RustifyMyClaw/releases</releaseNotes>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
