@@ -3,6 +3,7 @@
 [![CI](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/Escoto/RustifyMyClaw)](https://github.com/Escoto/RustifyMyClaw/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Escoto/RustifyMyClaw/total)](https://github.com/Escoto/RustifyMyClaw/releases)
+[![Chocolatey](https://img.shields.io/chocolatey/v/rustifymyclaw)](https://community.chocolatey.org/packages/rustifymyclaw)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Made with Rust](https://img.shields.io/badge/Made%20with-Rust-orange?logo=rust)](https://www.rust-lang.org)
 
@@ -83,7 +84,13 @@ The daemon never modifies your prompt, never overrides your model, and never per
 curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+**Windows (Chocolatey):**
+
+```powershell
+choco install rustifymyclaw
+```
+
+**Windows (PowerShell script):**
 
 ```powershell
 irm https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.ps1 | iex

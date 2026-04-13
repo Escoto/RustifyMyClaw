@@ -50,6 +50,8 @@ $p = [Environment]::GetEnvironmentVariable('Path', 'User')
 [Environment]::SetEnvironmentVariable('Path', "$env:APPDATA\RustifyMyClaw;$p", 'User')
 ```
 
+> **Windows users:** Pre-built binaries are also available via `choco install rustifymyclaw`. Building from source is only needed for development or unsupported platforms.
+
 ## Next steps
 
 Edit `~/.rustifymyclaw/config.yaml` (or `%APPDATA%\RustifyMyClaw\config.yaml` on Windows) — see [configuration.md](configuration.md) for the full field reference.

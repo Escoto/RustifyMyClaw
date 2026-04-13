@@ -98,6 +98,16 @@ Changes that affect module boundaries, add a new backend or channel, or touch th
 
 See `docs/architecture.md` for the system design and extension points.
 
+## Release process
+
+Releases are maintainer-only via `workflow_dispatch` on `main`:
+
+1. Update `Cargo.toml` version to match the intended release.
+2. Trigger the **Release** workflow from GitHub Actions, selecting the bump type (patch/minor/major).
+3. The workflow validates the version, builds cross-platform artifacts, creates a GitHub Release with checksums, then automatically publishes to **crates.io** and **Chocolatey** in parallel.
+
+Secrets (`CARGO_REGISTRY_TOKEN`, `CHOCO_API_KEY`) are scoped to the `release` environment. Contributors don't need access to these — the pipeline handles everything after merge.
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant v2.1](CODE_OF_CONDUCT.md).
