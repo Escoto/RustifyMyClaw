@@ -169,3 +169,11 @@ jobs:
           generate_release_notes: true
           draft: false
           files: artifacts/*
+
+  publish:
+    needs: [determine_version, release]
+    if: ${{ !inputs.dry_run }}
+    uses: ./.github/workflows/publish.yml
+    with:
+      version: ${{ needs.determine_version.outputs.new_version }}
+    secrets: inherit

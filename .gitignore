@@ -17,3 +17,4 @@ target
 .env
 .obsidian
 _*.md
+*.nupkg

@@ -1,6 +1,6 @@
 [package]
 name = "rustifymyclaw"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Run Coding CLI Agents from Messaging Apps - single Rust binary, no server required."
 license = "Apache-2.0"
