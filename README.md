@@ -43,6 +43,10 @@ RustifyMyClaw runs locally. Messages in -> directly to your Agent, responses out
 4. **Executor** spawns your CLI tool locally. Prompt passed through unmodified.
 5. **Formatter** chunks the output respecting code blocks and UTF-8 boundaries, sends it back.
 
+## Demos
+
+- [Demo: Install via Cargo](docs/demos/cargo/README.md) — install, configure, and run.
+
 ## Features
 
 - Code-block-aware output chunking — fenced blocks never split mid-block, UTF-8 safe
@@ -176,9 +180,6 @@ Each channel connects using the platform's native protocol. No webhooks required
 | `/status` | Show current workspace, backend, and session state |
 | `/help` | List available commands |
 
-## Demos
-
-- [Cargo install walkthrough](docs/demos/cargo/steps.md) — install, configure, and run via `cargo install`
 
 ## Documentation
 
