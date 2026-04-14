@@ -50,7 +50,7 @@ RustifyMyClaw runs locally. Messages in -> directly to your Agent, responses out
 - Graceful shutdown with 30s in-flight message drain
 - Per-workspace process timeout to prevent runaway sessions
 - Env var interpolation for all secrets — zero hardcoded tokens
-- 130+ tests, zero clippy warnings, trait-based extensibility
+- 140+ tests, zero clippy warnings, trait-based extensibility
 - Single binary, cross-platform (Linux, macOS, Windows)
 
 ## Quickstart
