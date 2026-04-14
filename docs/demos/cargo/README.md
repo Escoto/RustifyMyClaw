@@ -18,7 +18,7 @@ I began this project to interact with my Claude Code coach `Coach-Claudio`, whic
 
     3. **Save Your API Token**, once the username is accepted, BotFather will send a success message containing your HTTP API Token.
 
-    > Important!
+    > [!CAUTION]
     > Keep this token secret. It is the key to controlling your bot and
     > connecting it to any software or code you write.
 
