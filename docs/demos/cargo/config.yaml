@@ -1,0 +1,16 @@
+workspaces:
+  - name: "Coach-Claudio"
+    directory: "C:\\repos\\apps\\Coach-Claudio"
+    backend: "claude-cli"
+    timeout_seconds: 300
+    channels:
+      - kind: telegram
+        token: "${coach_claudio_token}"
+        bot_name: "@coach_claudio_bot"
+        allowed_users:
+          - "@me"
+
+output:
+  max_message_chars: 600
+  file_upload_threshold_bytes: 51200
+  chunk_strategy: "natural"
