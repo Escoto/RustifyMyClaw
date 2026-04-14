@@ -3,6 +3,7 @@
 [![CI](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml/badge.svg)](https://github.com/Escoto/RustifyMyClaw/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/Escoto/RustifyMyClaw)](https://github.com/Escoto/RustifyMyClaw/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Escoto/RustifyMyClaw/total)](https://github.com/Escoto/RustifyMyClaw/releases)
+[![crates.io](https://img.shields.io/crates/v/rustifymyclaw)](https://crates.io/crates/rustifymyclaw)
 [![Chocolatey](https://img.shields.io/chocolatey/v/rustifymyclaw)](https://community.chocolatey.org/packages/rustifymyclaw)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Made with Rust](https://img.shields.io/badge/Made%20with-Rust-orange?logo=rust)](https://www.rust-lang.org)
@@ -61,6 +62,12 @@ RustifyMyClaw runs locally. Messages in -> directly to your Agent, responses out
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash
+```
+
+**crates.io (any platform with Rust installed):**
+
+```bash
+cargo install rustifymyclaw
 ```
 
 **Windows (Chocolatey):**
@@ -168,6 +175,10 @@ Each channel connects using the platform's native protocol. No webhooks required
 | `/use <workspace>` | Switch to a different workspace |
 | `/status` | Show current workspace, backend, and session state |
 | `/help` | List available commands |
+
+## Demos
+
+- [Cargo install walkthrough](docs/demos/cargo/steps.md) — install, configure, and run via `cargo install`
 
 ## Documentation
 
