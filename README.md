@@ -23,56 +23,35 @@ No database. No cloud. No accounts. A single Rust binary and one YAML config fil
 
 ## Why RustifyMyClaw
 
-### The problem
+AI CLI tools are powerful but locked to your terminal. Existing bridges require cloud hosting, databases, and trusting a third party with your prompts.
 
-AI CLI tools like Claude Code, Codex, and Gemini CLI are powerful — but they're locked to your terminal. You can't reach them while away from your desk. Existing bridges require cloud hosting, databases, and trusting a third party with your prompts and running wild on your pc.
-
-### The solution
-
-RustifyMyClaw is a secure local proxy daemon written in Rust. It runs on your machine, accepts messages from your messaging platform, passes them **unmodified** to the CLI tool you configured, and returns the response. One binary. One YAML file. Nothing else.
+RustifyMyClaw runs locally. Messages in -> directly to your Agent, responses out -> directly back to you - zero tinkering with your requests. One binary, one YAML file, and your Agent's own config.
 
 ### Your prompts stay yours
 
-- **No database.** No message logging. All state is volatile in-memory — a boolean and a timestamp per session. Restart the daemon and it's a clean slate.
-- **No prompt modification.** Your message is passed directly to the CLI as-is. No inspection, no rewriting, no rerouting.
-- **No model override.** The backend you configured is the backend that runs. Period.
-- **No agent configuration.** Your CLI tool's own their own settings — project instructions, tool permissions, safety rules — remain the sole authority over what the agent can and cannot do. RustifyMyClaw doesn't add, remove, or override any of it.
-- **No cloud. No telemetry. No phone-home.** The daemon listens to your messaging platform's API to receive and send messages. Everything else happens locally. Self-hosted means self-hosted.
+- **No database.** The only state is `is_active: bool` — whether the conversation has an ongoing session (so the backend knows to pass `--continue` or not). Restart = clean slate.
+- **No prompt modification.** Messages pass to the CLI as-is.
+- **No agent override.** Your CLI tool's own config governs what the agent can do. RustifyMyClaw doesn't touch it.
+- **No cloud. No telemetry.** Talks to your messaging platform's API. Everything else is local.
 
 ## How it works
 
-1. A message arrives on your configured channel (Telegram, WhatsApp, or Slack).
-2. **SecurityGate** checks the sender against your per-channel allowlist. Unauthorized messages are silently dropped — no error response, no acknowledgment.
-3. **Router** parses the message. Commands (`/new`, `/use`, `/status`, `/help`) are handled internally. Everything else is a prompt.
-4. **Executor** spawns your configured CLI tool as a local process in your project directory. Your prompt is passed through unmodified.
-5. **Formatter** chunks the CLI output intelligently — respecting code block boundaries, paragraph breaks, and UTF-8 character boundaries — then sends it back to the originating chat.
-
-The daemon never modifies your prompt, never overrides your model, and never persists any data. It is a pass-through proxy. Your CLI tool's own configuration — project instructions, tool permissions, safety rules — governs what the agent can do, not RustifyMyClaw.
+1. Message arrives on your channel (Telegram, WhatsApp, or Slack).
+2. **SecurityGate** checks the sender against your allowlist. Unauthorized = silent drop.
+3. **Router** parses commands (`/new`, `/use`, `/status`, `/help`). Everything else is a prompt.
+4. **Executor** spawns your CLI tool locally. Prompt passed through unmodified.
+5. **Formatter** chunks the output respecting code blocks and UTF-8 boundaries, sends it back.
 
 ## Features
 
-**Security & Privacy**
-- Zero-trust gateway — per-channel user allowlists with platform-native identity validation
-- Unauthorized messages silently dropped (no information leakage to attackers)
-- No database, no logs, no persistent state of any kind
-- Environment variable interpolation for all secrets — zero hardcoded tokens
-
-**Intelligent Output**
-- Natural chunking that respects code block boundaries (fenced blocks never split mid-block)
-- UTF-8 safe splitting — never panics on emoji or multibyte characters
-- Automatic file upload when responses exceed a configurable threshold
-
-**Operations**
-- Per-user sliding-window rate limiting (configurable, optional)
-- Config hot-reload — rate limit changes apply immediately without restart
-- Graceful shutdown with 30-second in-flight message drain
-- Process timeout enforcement per workspace (prevents runaway CLI sessions)
-- Structured logging via `tracing` with configurable levels
-
-**Quality**
-- 130+ tests, zero clippy warnings, `cargo fmt` enforced
-- Trait-based extensibility — add backends or channels by implementing one trait
-- Single binary, one YAML config, cross-platform (Linux, macOS, Windows)
+- Code-block-aware output chunking — fenced blocks never split mid-block, UTF-8 safe
+- Auto file upload when responses exceed a configurable threshold
+- Per-user rate limiting with config hot-reload (no restart needed)
+- Graceful shutdown with 30s in-flight message drain
+- Per-workspace process timeout to prevent runaway sessions
+- Env var interpolation for all secrets — zero hardcoded tokens
+- 130+ tests, zero clippy warnings, trait-based extensibility
+- Single binary, cross-platform (Linux, macOS, Windows)
 
 ## Quickstart
 
