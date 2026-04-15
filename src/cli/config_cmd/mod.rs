@@ -30,7 +30,7 @@ pub enum ConfigAction {
     },
     /// Read a single config value by dotted path (e.g. output.max_message_chars).
     Get {
-        /// Dotted path to the value (e.g. workspaces[0].backend).
+        /// Dotted path to the value (e.g. `workspaces[0].backend`).
         key: String,
     },
     /// Write a single config value by dotted path.

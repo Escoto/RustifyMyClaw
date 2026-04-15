@@ -66,7 +66,7 @@ All four must pass before any commit.
 - **Config structs are dumb data.** No methods on config types beyond `Deserialize`. Logic lives in the components that consume them.
 - **Workspace reference must stay behind `Arc`.** Never hold a raw `WorkspaceHandle` in a listener. This is critical for V2 `/use` compatibility.
 - **Factory lookup, not per-message allocation.** `backend::build(name)` is the factory. `startup::build_workspaces()` builds one `Arc<dyn CliBackend>` per distinct backend name, stored in a `HashMap`. The router looks up by name.
-- **MessageContext stamping at ingestion.** Channel providers stamp every `InboundMessage` with workspace `Arc`, provider `Arc`, and effective output config. The router reads routing info directly from the message — no lookup tables.
+- **MessageContext stamping at ingestion.** Channel providers use `InboundMessage::new(chat_id, user_id, text, &workspace, &provider, &output_config)` which clones the `Arc`s internally. The router reads routing info directly from the message — no lookup tables.
 - **`self_arc` on `start()`.** `ChannelProvider::start()` takes a separate `self_arc: Arc<dyn ChannelProvider>` because polling closures need owned captures. A `&self` borrow doesn't live long enough.
 
 ### Error Handling
@@ -143,15 +143,14 @@ All four must pass before any commit.
 1. Create `src/channel/<name>.rs` with a struct that implements `ChannelProvider` and `ChannelProviderFactory`.
 2. Add a module-level `resolve_users(users: &[AllowedUser]) -> Result<HashSet<String>>` function (or `async fn` if network I/O is needed) — convert `AllowedUser` entries to platform-native ID strings for `SecurityGate`. See `docs/architecture.md` for examples.
 3. Implement `ChannelProviderFactory::create(ch_config, workspace, global_output)` — validate provider-specific config fields, call `resolve_users(&ch_config.allowed_users)`, build `SecurityGate::new(resolved)`, compute effective output config, then construct the provider once.
-4. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, stamp each message with `MessageContext`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
+4. Implement `start(&self, tx, self_arc, shutdown)` — run the polling or webhook loop, check `SecurityGate`, build messages via `InboundMessage::new(chat_id, user_id, text, &workspace, &self_arc, &output_config)`, send on `tx`. Exit when `shutdown.cancelled()` resolves. Use `self_arc` (not `self`) inside any closures that need to reference the provider.
 5. Implement `send_response(&self, chat_id, response)` — deliver each `ResponseChunk` to the platform.
-6. Stamp `MessageContext` at ingestion: `workspace: Arc<WorkspaceHandle>`, `provider: self_arc.clone()`, `output_config: Arc::new(effective_output_config(global, channel_cfg))`.
-7. Add `pub mod <name>;` in `src/channel/mod.rs`.
-8. Add the kind string to `KNOWN_CHANNELS` in `src/config.rs`.
-9. Add a match arm for the new kind in `build()` in `src/channel/mod.rs`.
-10. Add `warn_misplaced_fields()` entries in `src/config.rs` for any platform-specific config fields.
-11. Add tests in `src/tests/channel/<name>_test.rs` and wire with `#[path = ...]` in the source file.
-12. Update the channels table in `README.md` and add a field reference section in `docs/configuration.md`.
+6. Add `pub mod <name>;` in `src/channel/mod.rs`.
+7. Add the kind string to `KNOWN_CHANNELS` in `src/config.rs`.
+8. Add a match arm for the new kind in `build()` in `src/channel/mod.rs`.
+9. Add `warn_misplaced_fields()` entries in `src/config.rs` for any platform-specific config fields.
+10. Add tests in `src/tests/channel/<name>_test.rs` and wire with `#[path = ...]` in the source file.
+11. Update the channels table in `README.md` and add a field reference section in `docs/configuration.md`.
 
 ## Do Not
 

@@ -28,6 +28,32 @@ pub struct ChatId {
     pub platform_id: String,
 }
 
+impl ChatId {
+    /// Create a Telegram chat ID from a stringified `i64` chat ID.
+    pub fn telegram(platform_id: &str) -> Self {
+        Self {
+            channel: ChannelKind::Telegram,
+            platform_id: platform_id.to_string(),
+        }
+    }
+
+    /// Create a WhatsApp chat ID from a phone number (e.g. `+5511999999999`).
+    pub fn whatsapp(platform_id: &str) -> Self {
+        Self {
+            channel: ChannelKind::WhatsApp,
+            platform_id: platform_id.to_string(),
+        }
+    }
+
+    /// Create a Slack chat ID from a channel ID (e.g. `C01ABCDEF`).
+    pub fn slack(platform_id: &str) -> Self {
+        Self {
+            channel: ChannelKind::Slack,
+            platform_id: platform_id.to_string(),
+        }
+    }
+}
+
 /// Represents an allowed user in the config. Each platform has its own identity format.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
@@ -46,6 +72,29 @@ pub struct InboundMessage {
     pub text: String,
     /// Routing context stamped by the channel listener at ingestion time.
     pub context: MessageContext,
+}
+
+impl InboundMessage {
+    /// Stamp an inbound message with routing context. Clones the `Arc`s for the router.
+    pub fn new(
+        chat_id: ChatId,
+        user_id: String,
+        text: String,
+        workspace: &Arc<RwLock<WorkspaceHandle>>,
+        provider: &Arc<dyn ChannelProvider>,
+        output_config: &Arc<OutputConfig>,
+    ) -> Self {
+        Self {
+            chat_id,
+            user_id,
+            text,
+            context: MessageContext {
+                workspace: Arc::clone(workspace),
+                provider: Arc::clone(provider),
+                output_config: Arc::clone(output_config),
+            },
+        }
+    }
 }
 
 /// Routing context attached by the channel listener. Carries everything the router

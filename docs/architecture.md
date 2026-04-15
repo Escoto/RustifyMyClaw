@@ -54,7 +54,7 @@ A message from Telegram to a response back:
 
 1. `TelegramProvider` receives an update via teloxide long-polling.
 2. `SecurityGate` checks `user_id` against the channel's `allowed_users` set. If not allowed, drop silently.
-3. Provider stamps an `InboundMessage` with `MessageContext` (workspace `Arc`, provider `Arc`, effective output config) and sends it on the `mpsc` channel.
+3. Provider creates an `InboundMessage` via `InboundMessage::new(chat_id, user_id, text, &workspace, &provider, &output_config)` and sends it on the `mpsc` channel.
 4. `Router` receives the message and calls `BridgeCommand::parse(&msg.text)`.
 5. If it's `/new`, `/status`, `/help`, or `/use` — handle directly and respond via `msg.context.provider.send_response()`.
 6. If it's a `Prompt`, check rate limit. If limited, send a "try again in N seconds" reply.
@@ -164,7 +164,7 @@ Each provider module defines a `resolve_users` function (free function, not a tr
 
 `ChannelProviderFactory::create()` calls the module's `resolve_users` function, builds `SecurityGate::new(resolved)`, computes the effective output config, then constructs the provider once. No temporary instances, no dummy gates.
 
-The `self_arc` parameter on `start()` exists because polling closures need owned captures of the provider. Pass it through to any closure that stamps `MessageContext`.
+The `self_arc` parameter on `start()` exists because polling closures need owned captures of the provider. Pass it to `InboundMessage::new()` as the provider reference.
 
 `channel::build()` dispatches by kind string and is the single entry point called from `startup::build_workspaces()`.
 

@@ -14,8 +14,7 @@ use crate::channel::{ChannelProvider, ChannelProviderFactory};
 use crate::config::{self, ChannelConfig, OutputConfig};
 use crate::security::SecurityGate;
 use crate::types::{
-    AllowedUser, ChannelKind, ChatId, FormattedResponse, InboundMessage, MessageContext,
-    ResponseChunk, WorkspaceHandle,
+    AllowedUser, ChatId, FormattedResponse, InboundMessage, ResponseChunk, WorkspaceHandle,
 };
 
 const TELEGRAM_MAX_CHARS: usize = 4096;
@@ -108,21 +107,16 @@ impl ChannelProvider for TelegramProvider {
                     return Ok(());
                 }
 
-                let chat_id = ChatId {
-                    channel: ChannelKind::Telegram,
-                    platform_id: msg.chat.id.0.to_string(),
-                };
+                let chat_id = ChatId::telegram(&msg.chat.id.0.to_string());
 
-                let inbound = InboundMessage {
+                let inbound = InboundMessage::new(
                     chat_id,
                     user_id,
-                    text: text.to_string(),
-                    context: MessageContext {
-                        workspace: Arc::clone(&workspace),
-                        provider,
-                        output_config: Arc::clone(&output_config),
-                    },
-                };
+                    text.to_string(),
+                    &workspace,
+                    &provider,
+                    &output_config,
+                );
 
                 if tx.send(inbound).await.is_err() {
                     tracing::error!("router channel closed — cannot forward telegram message");
