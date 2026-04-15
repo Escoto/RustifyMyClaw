@@ -1,3 +1,4 @@
+mod allow_path;
 mod dotted_path;
 mod get;
 mod init;
@@ -40,6 +41,11 @@ pub enum ConfigAction {
         /// New value (auto-detected as int, bool, or string).
         value: String,
     },
+    /// Grant the systemd service read-write access to a workspace directory (Linux only, requires sudo).
+    AllowPath {
+        /// Filesystem path to allow (e.g. /home/user/projects/my-project).
+        path: std::path::PathBuf,
+    },
 }
 
 pub fn run(action: &ConfigAction, config_path: &Path) -> Result<()> {
@@ -50,5 +56,6 @@ pub fn run(action: &ConfigAction, config_path: &Path) -> Result<()> {
         ConfigAction::Init { file, dir } => init::run(file.as_deref(), dir.as_deref(), config_path),
         ConfigAction::Get { key } => get::run(config_path, key),
         ConfigAction::Set { key, value } => set::run(config_path, key, value),
+        ConfigAction::AllowPath { path } => allow_path::run(path),
     }
 }

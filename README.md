@@ -66,16 +66,10 @@ RustifyMyClaw runs locally. Messages in -> directly to your Agent, responses out
 curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash
 ```
 
-**crates.io (any platform with Rust installed):**
+**Specific version:**
 
 ```bash
-cargo install rustifymyclaw
-```
-
-**Windows (Chocolatey):**
-
-```powershell
-choco install rustifymyclaw
+curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash -s -- v0.1.0
 ```
 
 **Windows (PowerShell script):**
@@ -84,10 +78,16 @@ choco install rustifymyclaw
 irm https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.ps1 | iex
 ```
 
-The installer downloads the binary, verifies its SHA256 checksum, creates a starter config, and adds it to your PATH. To install a specific version:
+**Windows (Chocolatey):**
+
+```powershell
+choco install rustifymyclaw
+```
+
+**crates.io (any platform with Rust installed):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | bash -s -- v0.1.0
+cargo install rustifymyclaw
 ```
 
 Or [build from source](docs/building-from-source.md).
@@ -148,6 +148,32 @@ Validate your config without starting the daemon:
 ```bash
 rustifymyclaw --validate
 ```
+
+### 4. Run as a Linux daemon
+
+> [!IMPORTANT]
+> **Requires explicite workspace write permissions**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | sudo bash -s -- --system
+```
+
+This places the binary in `/usr/local/bin/`, config in `/etc/rustifymyclaw/`, and installs a hardened systemd unit. Then:
+
+```bash
+sudo nano /etc/rustifymyclaw/config.yaml     # configure workspaces/channels
+sudo nano /etc/rustifymyclaw/env             # add API tokens
+sudo systemctl enable --now rustifymyclaw
+journalctl -u rustifymyclaw -f               # check logs
+```
+
+To allow your CLI Agent to **write**, use the built-in command:
+
+```bash
+sudo rustifymyclaw config allow-path /home/user/projects/my-project
+```
+
+See [docs/configuration.md](docs/configuration.md#running-as-a-systemd-service-linux) for full setup details and security hardening options.
 
 ## Backends
 

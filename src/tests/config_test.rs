@@ -414,12 +414,35 @@ fn resolve_path_falls_back_to_dirs_path() {
     let key = "RUSTIFYMYCLAW_CONFIG";
     std::env::remove_var(key);
     // When no CLI flag, no env var, and no ./config.yaml in CWD,
-    // resolve_path should return the platform default.
+    // resolve_path should return the platform default (home dir path).
     let result = resolve_path(None);
     // The fallback is dirs_path() — at minimum it ends with config.yaml.
     assert!(
         result.ends_with("config.yaml"),
         "expected path ending in config.yaml, got: {}",
+        result.display()
+    );
+}
+
+/// When neither home-dir nor /etc/ config exists, resolve_path still returns
+/// a usable path (the home-dir default) so load_from_path can produce a
+/// clear error message.
+#[test]
+fn resolve_path_returns_home_default_when_no_files_exist() {
+    let key = "RUSTIFYMYCLAW_CONFIG";
+    std::env::remove_var(key);
+    let result = resolve_path(None);
+    // Should be the home-based path, not /etc/
+    let expected_suffix = std::path::Path::new("config.yaml");
+    assert!(
+        result.ends_with(expected_suffix),
+        "expected path ending in config.yaml, got: {}",
+        result.display()
+    );
+    #[cfg(not(target_os = "windows"))]
+    assert!(
+        !result.starts_with("/etc/"),
+        "should prefer home-dir fallback over /etc/, got: {}",
         result.display()
     );
 }

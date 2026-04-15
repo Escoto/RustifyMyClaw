@@ -99,7 +99,10 @@ pub fn effective_output_config(global: &OutputConfig, channel: &ChannelConfig) -
 /// 1. Explicit CLI flag (`-f` / `--config-file`)
 /// 2. `RUSTIFYMYCLAW_CONFIG` environment variable
 /// 3. `./config.yaml` in the current working directory (only if the file exists)
-/// 4. Platform default ([`dirs_path`])
+/// 4. `~/.rustifymyclaw/config.yaml` (only if the file exists)
+/// 5. `/etc/rustifymyclaw/config.yaml` (Unix only, only if the file exists)
+/// 6. Platform default ([`dirs_path`]) as final fallback (even if missing, so
+///    [`load_from_path`] can produce a clear error)
 pub fn resolve_path(cli_override: Option<PathBuf>) -> PathBuf {
     if let Some(p) = cli_override {
         return p;
@@ -113,7 +116,20 @@ pub fn resolve_path(cli_override: Option<PathBuf>) -> PathBuf {
     if cwd_candidate.exists() {
         return cwd_candidate;
     }
-    dirs_path()
+    let home_candidate = dirs_path();
+    if home_candidate.exists() {
+        return home_candidate;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let etc_candidate = PathBuf::from("/etc/rustifymyclaw/config.yaml");
+        if etc_candidate.exists() {
+            return etc_candidate;
+        }
+    }
+    // Final fallback: return the home path even if it doesn't exist, so
+    // load_from_path produces a clear "cannot read config file" error.
+    home_candidate
 }
 
 /// Load and validate config from an explicit path.
