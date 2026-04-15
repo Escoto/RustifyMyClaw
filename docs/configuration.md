@@ -9,9 +9,10 @@ RustifyMyClaw resolves the config path using this priority chain:
 | 1 | `-f` / `--config-file` CLI flag | `rustifymyclaw -f ./my-config.yaml` |
 | 2 | `RUSTIFYMYCLAW_CONFIG` environment variable | `export RUSTIFYMYCLAW_CONFIG=~/projects/config.yaml` |
 | 3 | `./config.yaml` in the current working directory | `cd my-project && rustifymyclaw` |
-| 4 | Platform default | `~/.rustifymyclaw/config.yaml` (Unix) or `%APPDATA%\RustifyMyClaw\config.yaml` (Windows) |
+| 4 | `~/.rustifymyclaw/config.yaml` | Per-user config (Unix) or `%APPDATA%\RustifyMyClaw\config.yaml` (Windows) |
+| 5 | `/etc/rustifymyclaw/config.yaml` | System-wide config (Unix only) |
 
-The first match wins. Use `rustifymyclaw config path` to see which path would be used from your current directory.
+The first **existing** file wins. Use `rustifymyclaw config path` to see which path would be used from your current directory.
 
 ## Full annotated example
 
@@ -187,3 +188,84 @@ RustifyMyClaw watches `config.yaml` for changes using the `notify` crate. Change
 | `allowed_users` | Logged as changed. Requires restart to apply. |
 
 Invalid configs (YAML errors, missing env vars, validation failures) are logged and the running config remains in effect.
+
+## Running as a systemd service (Linux)
+
+### System-wide install
+
+```bash
+sudo bash scripts/install.sh --system
+```
+
+This installs the binary to `/usr/local/bin/`, creates `/etc/rustifymyclaw/` with a starter config, env file, and systemd unit.
+
+### Manual setup
+
+1. Copy the binary to `/usr/local/bin/` and the unit file:
+
+```bash
+sudo cp rustifymyclaw /usr/local/bin/
+sudo chmod 755 /usr/local/bin/rustifymyclaw
+sudo cp systemd/rustifymyclaw.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+2. Create the config directory and files:
+
+```bash
+sudo mkdir -p /etc/rustifymyclaw
+sudo cp examples/config.yaml /etc/rustifymyclaw/config.yaml
+sudo cp systemd/env.example /etc/rustifymyclaw/env
+sudo chmod 640 /etc/rustifymyclaw/config.yaml
+sudo chmod 600 /etc/rustifymyclaw/env
+```
+
+3. Edit `config.yaml` with your workspaces and channels.
+
+```bash
+sudo nano /etc/rustifymyclaw/config.yaml
+```
+
+4. Add API tokens to `env`:
+
+```bash
+sudo nano /etc/rustifymyclaw/env
+```
+
+5. Enable and start:
+
+```bash
+sudo systemctl enable --now rustifymyclaw
+```
+
+### Enable daemon to access your workspaces / directory permissions
+
+Because `DynamicUser=yes` runs the daemon as an ephemeral user, workspace directories are read-only by default. Without this step your CLI agent can still read the project and answer questions about it, but cannot write or edit files. If you expect your agent to have write permissions, you must explicitly allow each workspace path.
+
+Use the built-in command:
+
+```bash
+sudo rustifymyclaw config allow-path /home/user/projects/my-project
+```
+
+Or, manually:
+
+```ini
+# /etc/systemd/system/rustifymyclaw.service.d/override.conf
+[Service]
+ReadWritePaths=/home/user/projects/my-project
+```
+Then reload: `sudo systemctl daemon-reload && sudo systemctl restart rustifymyclaw`
+
+### Security hardening
+
+The included systemd unit uses:
+
+- **`DynamicUser=yes`** — allocates an ephemeral service user, no manual user creation.
+- **`NoNewPrivileges=yes`** — the process cannot gain new privileges.
+- **`ProtectSystem=strict`** — the filesystem is read-only except for allowed paths.
+- **`ProtectHome=read-only`** — home directories are visible but not writable.
+- **`PrivateTmp=yes`** — isolated `/tmp` namespace.
+- **`EnvironmentFile`** — secrets loaded from `/etc/rustifymyclaw/env` (mode 600).
+
+

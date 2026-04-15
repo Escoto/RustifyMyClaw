@@ -9,9 +9,32 @@ set -euo pipefail
 
 REPO="Escoto/RustifyMyClaw"
 BINARY_NAME="rustifymyclaw"
+GITHUB_API="https://api.github.com/repos/${REPO}"
+SYSTEM_INSTALL=false
+
+# Paths — overridden when --system is passed
 INSTALL_DIR="${HOME}/.rustifymyclaw"
 CONFIG_FILE="${INSTALL_DIR}/config.yaml"
-GITHUB_API="https://api.github.com/repos/${REPO}"
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+for arg in "$@"; do
+    case "$arg" in
+        --system) SYSTEM_INSTALL=true ;;
+    esac
+done
+
+if $SYSTEM_INSTALL; then
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Error: --system install requires root. Run with sudo." >&2
+        exit 1
+    fi
+    INSTALL_DIR="/usr/local/bin"
+    CONFIG_DIR="/etc/rustifymyclaw"
+    CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+    ENV_FILE="${CONFIG_DIR}/env"
+fi
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -164,15 +187,23 @@ download_and_verify() {
 # Install binary
 # ---------------------------------------------------------------------------
 install_binary() {
-    mkdir -p "$INSTALL_DIR"
+    if $SYSTEM_INSTALL; then
+        info "Extracting binary to ${INSTALL_DIR}..."
+        local tmp_extract
+        tmp_extract=$(mktemp -d)
+        tar xzf "$ARTIFACT_PATH" -C "$tmp_extract"
+        install -m 755 "${tmp_extract}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+        rm -rf "$tmp_extract"
+    else
+        mkdir -p "$INSTALL_DIR"
+        info "Extracting to ${INSTALL_DIR}..."
+        tar xzf "$ARTIFACT_PATH" -C "$INSTALL_DIR"
+        chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 
-    info "Extracting to ${INSTALL_DIR}..."
-    tar xzf "$ARTIFACT_PATH" -C "$INSTALL_DIR"
-    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
-
-    # macOS: remove quarantine attribute
-    if [ "$(uname -s)" = "Darwin" ]; then
-        xattr -d com.apple.quarantine "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        # macOS: remove quarantine attribute
+        if [ "$(uname -s)" = "Darwin" ]; then
+            xattr -d com.apple.quarantine "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        fi
     fi
 
     info "Binary installed at ${INSTALL_DIR}/${BINARY_NAME}"
@@ -182,18 +213,57 @@ install_binary() {
 # Config scaffold
 # ---------------------------------------------------------------------------
 write_config() {
+    if $SYSTEM_INSTALL; then
+        mkdir -p "$CONFIG_DIR"
+        chmod 755 "$CONFIG_DIR"
+    fi
+
     if [ -f "$CONFIG_FILE" ]; then
         info "Existing config preserved at ${CONFIG_FILE}"
+    else
+        local config_url="https://raw.githubusercontent.com/${REPO}/main/examples/config.yaml"
+        info "Downloading example config..."
+        download_file "$config_url" "$CONFIG_FILE" || \
+            die "Failed to download example config from ${config_url}"
+        if $SYSTEM_INSTALL; then
+            chmod 640 "$CONFIG_FILE"
+        else
+            chmod 600 "$CONFIG_FILE"
+        fi
+        info "Starter config created at ${CONFIG_FILE}"
+    fi
+
+    if $SYSTEM_INSTALL; then
+        if [ ! -f "$ENV_FILE" ]; then
+            local env_url="https://raw.githubusercontent.com/${REPO}/main/systemd/env.example"
+            info "Downloading env template..."
+            download_file "$env_url" "$ENV_FILE" || \
+                die "Failed to download env template from ${env_url}"
+            chmod 600 "$ENV_FILE"
+            info "Env file created at ${ENV_FILE} (chmod 600)"
+        else
+            info "Existing env file preserved at ${ENV_FILE}"
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Systemd unit installation (--system only)
+# ---------------------------------------------------------------------------
+install_systemd_unit() {
+    if ! $SYSTEM_INSTALL; then
         return
     fi
 
-    local config_url="https://raw.githubusercontent.com/${REPO}/main/examples/config.yaml"
-    info "Downloading example config..."
-    download_file "$config_url" "$CONFIG_FILE" || \
-        die "Failed to download example config from ${config_url}"
+    local unit_url="https://raw.githubusercontent.com/${REPO}/main/systemd/rustifymyclaw.service"
+    local unit_dest="/etc/systemd/system/rustifymyclaw.service"
 
-    chmod 600 "$CONFIG_FILE"
-    info "Starter config created at ${CONFIG_FILE}"
+    info "Installing systemd unit..."
+    download_file "$unit_url" "$unit_dest" || \
+        die "Failed to download systemd unit file"
+    chmod 644 "$unit_dest"
+    systemctl daemon-reload
+    info "Systemd unit installed at ${unit_dest}"
 }
 
 # ---------------------------------------------------------------------------
@@ -247,13 +317,24 @@ main() {
     printf "\n  RustifyMyClaw Installer\n\n"
 
     detect_platform
-    resolve_version "${1:-}"
+    # Pass first non-flag argument as version
+    local ver_arg=""
+    for arg in "$@"; do
+        case "$arg" in
+            --*) ;;
+            *) ver_arg="$arg"; break ;;
+        esac
+    done
+    resolve_version "${ver_arg}"
     info "Installing RustifyMyClaw ${VERSION} for ${PLATFORM}"
 
     download_and_verify
     install_binary
     write_config
-    update_path
+    install_systemd_unit
+    if ! $SYSTEM_INSTALL; then
+        update_path
+    fi
 
     printf "\n"
     info "RustifyMyClaw ${VERSION} installed successfully!"
@@ -261,16 +342,31 @@ main() {
     printf "  Binary:  %s/%s\n" "$INSTALL_DIR" "$BINARY_NAME"
     printf "  Config:  %s\n" "$CONFIG_FILE"
     printf "\n"
-    printf "  Next steps:\n"
-    printf "    1. Edit %s\n" "$CONFIG_FILE"
-    printf "       - Set your workspace directory\n"
-    printf "       - Configure your channel (Telegram / WhatsApp / Slack)\n"
-    printf "       - Set allowed_users\n"
-    printf "    2. Export required environment variables:\n"
-    printf "       export TELEGRAM_BOT_TOKEN=your_token_here\n"
-    printf "    3. Start the daemon:\n"
-    printf "       rustifymyclaw\n"
-    printf "    4. Open a new terminal or run:  source ~/.bashrc\n"
+
+    if $SYSTEM_INSTALL; then
+        printf "  Next steps:\n"
+        printf "    1. Edit %s\n" "$CONFIG_FILE"
+        printf "       - Set your workspace directory\n"
+        printf "       - Configure your channel (Telegram / WhatsApp / Slack)\n"
+        printf "       - Set allowed_users\n"
+        printf "    2. Add API tokens to %s\n" "$ENV_FILE"
+        printf "    3. Enable and start the service:\n"
+        printf "       sudo systemctl enable --now rustifymyclaw\n"
+        printf "    4. Check logs:\n"
+        printf "       journalctl -u rustifymyclaw -f\n"
+    else
+        printf "  Next steps:\n"
+        printf "    1. Edit %s\n" "$CONFIG_FILE"
+        printf "       - Set your workspace directory\n"
+        printf "       - Configure your channel (Telegram / WhatsApp / Slack)\n"
+        printf "       - Set allowed_users\n"
+        printf "    2. Export required environment variables:\n"
+        printf "       export TELEGRAM_BOT_TOKEN=your_token_here\n"
+        printf "    3. Start the daemon:\n"
+        printf "       rustifymyclaw\n"
+        printf "    4. Open a new terminal or run:  source ~/.bashrc\n"
+    fi
+
     printf "\n"
     printf "  Full config reference:\n"
     printf "  https://github.com/%s/blob/main/docs/configuration.md\n\n" "$REPO"

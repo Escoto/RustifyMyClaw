@@ -149,6 +149,31 @@ Validate your config without starting the daemon:
 rustifymyclaw --validate
 ```
 
+### Running as a Linux daemon
+
+**Requires explicite workspace path write permissions**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | sudo bash -s -- --system
+```
+
+This places the binary in `/usr/local/bin/`, config in `/etc/rustifymyclaw/`, and installs a hardened systemd unit. Then:
+
+```bash
+sudo nano /etc/rustifymyclaw/config.yaml     # configure workspaces/channels
+sudo nano /etc/rustifymyclaw/env             # add API tokens
+sudo systemctl enable --now rustifymyclaw
+journalctl -u rustifymyclaw -f               # check logs
+```
+
+To allow your CLI Agent to **write**, use the built-in command:
+
+```bash
+sudo rustifymyclaw config allow-path /home/user/projects/my-project
+```
+
+See [docs/configuration.md](docs/configuration.md#running-as-a-systemd-service-linux) for full setup details and security hardening options.
+
 ## Backends
 
 RustifyMyClaw proxies to whichever AI CLI tool you have installed locally. Adding a new backend is one file and one trait implementation — see [How to Add a New Backend](CLAUDE.md).
