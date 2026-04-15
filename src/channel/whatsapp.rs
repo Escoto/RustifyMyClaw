@@ -18,8 +18,7 @@ use crate::channel::{ChannelProvider, ChannelProviderFactory};
 use crate::config::{self, ChannelConfig, OutputConfig};
 use crate::security::SecurityGate;
 use crate::types::{
-    AllowedUser, ChannelKind, ChatId, FormattedResponse, InboundMessage, MessageContext,
-    ResponseChunk, WorkspaceHandle,
+    AllowedUser, ChatId, FormattedResponse, InboundMessage, ResponseChunk, WorkspaceHandle,
 };
 
 const WHATSAPP_MAX_CHARS: usize = 4096;
@@ -167,6 +166,17 @@ struct OutboundMessage {
     text: OutboundText,
 }
 
+impl OutboundMessage {
+    fn text(to: &str, body: String) -> Self {
+        Self {
+            messaging_product: "whatsapp",
+            to: to.to_string(),
+            kind: "text",
+            text: OutboundText { body },
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct OutboundText {
     body: String,
@@ -206,20 +216,15 @@ async fn handle_inbound(
                     tracing::trace!(user_id, "unauthorized whatsapp message — dropped");
                     continue;
                 }
-                let chat_id = ChatId {
-                    channel: ChannelKind::WhatsApp,
-                    platform_id: user_id.clone(),
-                };
-                let inbound = InboundMessage {
+                let chat_id = ChatId::whatsapp(&user_id);
+                let inbound = InboundMessage::new(
                     chat_id,
                     user_id,
-                    text: text_obj.body,
-                    context: MessageContext {
-                        workspace: Arc::clone(&state.workspace),
-                        provider: Arc::clone(&state.provider),
-                        output_config: Arc::clone(&state.output_config),
-                    },
-                };
+                    text_obj.body,
+                    &state.workspace,
+                    &state.provider,
+                    &state.output_config,
+                );
                 if state.tx.send(inbound).await.is_err() {
                     tracing::error!("router channel closed — cannot forward whatsapp message");
                 }
@@ -273,12 +278,7 @@ impl ChannelProvider for WhatsAppProvider {
             match chunk {
                 ResponseChunk::Text(text) => {
                     let safe = enforce_whatsapp_limit(&text);
-                    let body = OutboundMessage {
-                        messaging_product: "whatsapp",
-                        to: chat_id.platform_id.clone(),
-                        kind: "text",
-                        text: OutboundText { body: safe },
-                    };
+                    let body = OutboundMessage::text(&chat_id.platform_id, safe);
                     self.http_client
                         .post(&url)
                         .bearer_auth(&self.api_token)
@@ -300,12 +300,7 @@ impl ChannelProvider for WhatsAppProvider {
                     let notice =
                         format!("[File `{name}` ({} bytes) — see CLI output]", content.len());
                     let safe = enforce_whatsapp_limit(&notice);
-                    let body = OutboundMessage {
-                        messaging_product: "whatsapp",
-                        to: chat_id.platform_id.clone(),
-                        kind: "text",
-                        text: OutboundText { body: safe },
-                    };
+                    let body = OutboundMessage::text(&chat_id.platform_id, safe);
                     self.http_client
                         .post(&url)
                         .bearer_auth(&self.api_token)

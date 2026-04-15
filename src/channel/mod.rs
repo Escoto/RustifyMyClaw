@@ -43,7 +43,7 @@ pub trait ChannelProvider: Send + Sync {
 /// Factory trait for constructing a [`ChannelProvider`] from configuration.
 ///
 /// Each provider implements this to encapsulate its own config-field validation,
-/// user resolution, and [`SecurityGate`] construction. The companion [`build`]
+/// user resolution, and [`SecurityGate`](crate::security::SecurityGate) construction. The companion [`build`]
 /// function dispatches to the correct implementation by channel kind.
 #[async_trait]
 pub trait ChannelProviderFactory: ChannelProvider + Sized {

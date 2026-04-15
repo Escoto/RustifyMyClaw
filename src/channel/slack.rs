@@ -14,8 +14,7 @@ use crate::channel::{ChannelProvider, ChannelProviderFactory};
 use crate::config::{self, ChannelConfig, OutputConfig};
 use crate::security::SecurityGate;
 use crate::types::{
-    AllowedUser, ChannelKind, ChatId, FormattedResponse, InboundMessage, MessageContext,
-    ResponseChunk, WorkspaceHandle,
+    AllowedUser, ChatId, FormattedResponse, InboundMessage, ResponseChunk, WorkspaceHandle,
 };
 
 const SLACK_API_BASE: &str = "https://slack.com/api";
@@ -315,20 +314,15 @@ impl ChannelProvider for SlackProvider {
                                 .insert(channel_id.clone(), msg_ts);
                         }
 
-                        let chat_id = ChatId {
-                            channel: ChannelKind::Slack,
-                            platform_id: channel_id,
-                        };
-                        let inbound = InboundMessage {
+                        let chat_id = ChatId::slack(&channel_id);
+                        let inbound = InboundMessage::new(
                             chat_id,
                             user_id,
                             text,
-                            context: MessageContext {
-                                workspace: Arc::clone(&self.workspace),
-                                provider: Arc::clone(&self_arc),
-                                output_config: Arc::clone(&self.output_config),
-                            },
-                        };
+                            &self.workspace,
+                            &self_arc,
+                            &self.output_config,
+                        );
                         if tx.send(inbound).await.is_err() {
                             tracing::error!("router channel closed — cannot forward slack message");
                         }

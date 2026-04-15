@@ -49,14 +49,12 @@ RustifyMyClaw runs locally. Messages in -> directly to your Agent, responses out
 
 ## Features
 
-- Code-block-aware output chunking — fenced blocks never split mid-block, UTF-8 safe
-- Auto file upload when responses exceed a configurable threshold
-- Per-user rate limiting with config hot-reload (no restart needed)
-- Graceful shutdown with 30s in-flight message drain
-- Per-workspace process timeout to prevent runaway sessions
-- Env var interpolation for all secrets — zero hardcoded tokens
-- 140+ tests, zero clippy warnings, trait-based extensibility
-- Single binary, cross-platform (Linux, macOS, Windows)
+- Single binary, no dependencies.
+- Env var interpolation for all secrets, zero hardcoded tokens.
+- Per-workspace process timeout to prevent runaway sessions.
+- 140+ tests, zero clippy warnings, trait-based extensibility.
+- Block-aware output chunking/formatting - natural chat feeling.
+- Graceful shutdown with 30s in-flight message drain.
 
 ## Quickstart
 
