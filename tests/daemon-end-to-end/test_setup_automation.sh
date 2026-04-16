@@ -20,7 +20,7 @@ set -euo pipefail
 # Idempotent — safe to run multiple times.
 # ---------------------------------------------------------------------------
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME=$(eval echo "~${REAL_USER}")
 TEST_WORKSPACE="${REAL_HOME}/projects/test-workspace"
