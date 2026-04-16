@@ -239,11 +239,12 @@ write_config() {
             info "Downloading env template..."
             download_file "$env_url" "$ENV_FILE" || \
                 die "Failed to download env template from ${env_url}"
-            chmod 600 "$ENV_FILE"
-            info "Env file created at ${ENV_FILE} (chmod 600)"
+            info "Env file created at ${ENV_FILE}"
         else
             info "Existing env file preserved at ${ENV_FILE}"
         fi
+        chmod 600 "$ENV_FILE"
+        info "Permissions secured for ${ENV_FILE} (chmod 600)"
     fi
 }
 

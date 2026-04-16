@@ -13,9 +13,11 @@ RestartSec=5
 DynamicUser=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=false
 PrivateTmp=yes
 ReadOnlyPaths=/
+# Allow the daemon to explicitly write to paths configured by the user
+ReadWritePaths=/
 ConfigurationDirectory=rustifymyclaw
 EnvironmentFile=-/etc/rustifymyclaw/env
 
