@@ -127,8 +127,14 @@ pub fn resolve_path(cli_override: Option<PathBuf>) -> PathBuf {
             return etc_candidate;
         }
     }
-    // Final fallback: return the home path even if it doesn't exist, so
-    // load_from_path produces a clear "cannot read config file" error.
+
+    // Final fallback: if HOME is missing, we're likely a daemon; return /etc path
+    // so the resulting "file not found" error points to the right location.
+    #[cfg(not(target_os = "windows"))]
+    if std::env::var("HOME").is_err() {
+        return PathBuf::from("/etc/rustifymyclaw/config.yaml");
+    }
+
     home_candidate
 }
 
