@@ -10,14 +10,13 @@ Restart=on-failure
 RestartSec=5
 
 # Security hardening
-DynamicUser=yes
+User=rustifymyclaw
+Group=rustifymyclaw
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=false
 PrivateTmp=yes
 ReadOnlyPaths=/
-# Allow the daemon to explicitly write to paths configured by the user
-ReadWritePaths=/
 ConfigurationDirectory=rustifymyclaw
 EnvironmentFile=-/etc/rustifymyclaw/env
 

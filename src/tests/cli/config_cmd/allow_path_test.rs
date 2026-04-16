@@ -1,4 +1,7 @@
 use super::*;
+use std::path::Path;
+
+// ── merge_allowed_path tests ───────────────────────────────────────────────
 
 #[test]
 fn empty_existing_creates_service_section() {
@@ -77,4 +80,46 @@ fn duplicate_path_is_detected() {
         matches!(result, MergeResult::AlreadyPresent),
         "duplicate path should return AlreadyPresent"
     );
+}
+
+// ── traversal_parents tests ────────────────────────────────────────────────
+
+#[test]
+fn traversal_parents_typical_home_path() {
+    let parents = traversal_parents(Path::new("/home/rafa/repos/Claudio"));
+    let expected: Vec<&Path> = vec![
+        Path::new("/home"),
+        Path::new("/home/rafa"),
+        Path::new("/home/rafa/repos"),
+    ];
+    assert_eq!(parents, expected);
+}
+
+#[test]
+fn traversal_parents_shallow_path() {
+    let parents = traversal_parents(Path::new("/opt/workspace"));
+    let expected: Vec<&Path> = vec![Path::new("/opt")];
+    assert_eq!(parents, expected);
+}
+
+#[test]
+fn traversal_parents_root_child() {
+    // Path directly under / — no parents need traverse ACL.
+    let parents = traversal_parents(Path::new("/data"));
+    assert!(
+        parents.is_empty(),
+        "root-level path should have no traversal parents"
+    );
+}
+
+#[test]
+fn traversal_parents_deeply_nested() {
+    let parents = traversal_parents(Path::new("/a/b/c/d/e"));
+    let expected: Vec<&Path> = vec![
+        Path::new("/a"),
+        Path::new("/a/b"),
+        Path::new("/a/b/c"),
+        Path::new("/a/b/c/d"),
+    ];
+    assert_eq!(parents, expected);
 }
