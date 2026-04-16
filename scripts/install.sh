@@ -215,7 +215,8 @@ install_binary() {
 write_config() {
     if $SYSTEM_INSTALL; then
         mkdir -p "$CONFIG_DIR"
-        chmod 755 "$CONFIG_DIR"
+        chown root:rustifymyclaw "$CONFIG_DIR"
+        chmod 750 "$CONFIG_DIR"
     fi
 
     if [ -f "$CONFIG_FILE" ]; then
@@ -226,7 +227,8 @@ write_config() {
         download_file "$config_url" "$CONFIG_FILE" || \
             die "Failed to download example config from ${config_url}"
         if $SYSTEM_INSTALL; then
-            chmod 644 "$CONFIG_FILE"
+            chown root:rustifymyclaw "$CONFIG_FILE"
+            chmod 640 "$CONFIG_FILE"
         else
             chmod 600 "$CONFIG_FILE"
         fi
@@ -239,11 +241,34 @@ write_config() {
             info "Downloading env template..."
             download_file "$env_url" "$ENV_FILE" || \
                 die "Failed to download env template from ${env_url}"
-            chmod 600 "$ENV_FILE"
-            info "Env file created at ${ENV_FILE} (chmod 600)"
+            info "Env file created at ${ENV_FILE}"
         else
             info "Existing env file preserved at ${ENV_FILE}"
         fi
+        chown root:rustifymyclaw "$ENV_FILE"
+        chmod 640 "$ENV_FILE"
+        info "Permissions secured for ${ENV_FILE} (root:rustifymyclaw 640)"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Service user creation (--system only)
+# ---------------------------------------------------------------------------
+create_service_user() {
+    if ! $SYSTEM_INSTALL; then
+        return
+    fi
+
+    if ! getent group rustifymyclaw >/dev/null 2>&1; then
+        info "Creating system group: rustifymyclaw"
+        groupadd -r rustifymyclaw
+    fi
+
+    if ! id -u rustifymyclaw >/dev/null 2>&1; then
+        info "Creating system user: rustifymyclaw"
+        useradd -r -g rustifymyclaw -s /usr/sbin/nologin -d /nonexistent rustifymyclaw
+    else
+        info "System user rustifymyclaw already exists."
     fi
 }
 
@@ -330,6 +355,7 @@ main() {
 
     download_and_verify
     install_binary
+    create_service_user
     write_config
     install_systemd_unit
     if ! $SYSTEM_INSTALL; then

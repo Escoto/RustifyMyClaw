@@ -197,7 +197,7 @@ Invalid configs (YAML errors, missing env vars, validation failures) are logged 
 sudo bash scripts/install.sh --system
 ```
 
-This installs the binary to `/usr/local/bin/`, creates `/etc/rustifymyclaw/` with a starter config, env file, and systemd unit.
+This installs the binary to `/usr/local/bin/`, creates the `rustifymyclaw` system user and group, sets up `/etc/rustifymyclaw/` with a starter config, env file, and systemd unit.
 
 ### Manual setup
 
@@ -210,14 +210,20 @@ sudo cp systemd/rustifymyclaw.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
-2. Create the config directory and files:
+2. Create the service user and config directory:
 
 ```bash
+sudo groupadd -r rustifymyclaw
+sudo useradd -r -g rustifymyclaw -s /usr/sbin/nologin -d /nonexistent rustifymyclaw
 sudo mkdir -p /etc/rustifymyclaw
 sudo cp examples/config.yaml /etc/rustifymyclaw/config.yaml
 sudo cp systemd/env.example /etc/rustifymyclaw/env
+sudo chown root:rustifymyclaw /etc/rustifymyclaw
+sudo chmod 750 /etc/rustifymyclaw
+sudo chown root:rustifymyclaw /etc/rustifymyclaw/config.yaml
 sudo chmod 640 /etc/rustifymyclaw/config.yaml
-sudo chmod 600 /etc/rustifymyclaw/env
+sudo chown root:rustifymyclaw /etc/rustifymyclaw/env
+sudo chmod 640 /etc/rustifymyclaw/env
 ```
 
 3. Edit `config.yaml` with your workspaces and channels.
@@ -247,11 +253,11 @@ If you wish to use a configuration file other than the default `/etc/rustifymycl
 RUSTIFYMYCLAW_CONFIG=/path/to/your/custom-config.yaml
 ```
 
-**Important:** The daemon runs as a transient non-root user. Any custom configuration file must be world-readable (e.g., `chmod 644`) so the daemon can access it.
+**Important:** The daemon runs as the `rustifymyclaw` system user. Any custom configuration file must be readable by this user (e.g., `chown root:rustifymyclaw` and `chmod 640`).
 
 ### Enable daemon to access your workspaces / directory permissions
 
-Same as before. Because the daemon runs as an ephemeral user, workspace directories are read-only by default. Without this step your CLI agent can still read the project and answer questions about it, but cannot write or edit files. If you expect your agent to have write permissions, you must explicitly allow each workspace path.
+The daemon runs as the dedicated `rustifymyclaw` system user. Workspace directories are read-only by default. Without this step your CLI agent can still read the project and answer questions about it, but cannot write or edit files. If you expect your agent to have write permissions, you must explicitly allow each workspace path.
 
 Use the built-in command:
 
@@ -259,24 +265,53 @@ Use the built-in command:
 sudo rustifymyclaw config allow-path /home/user/projects/my-project
 ```
 
-Or, manually:
+This command does three things:
+1. **Grants traverse (`x`) ACLs** on each parent directory so the daemon can reach the workspace (e.g., `/home/user`, `/home/user/projects`).
+2. **Grants recursive read/write ACLs** on the workspace directory and all contents, with default ACLs so newly created files inherit permissions.
+3. **Adds a `ReadWritePaths=` entry** to the systemd override so the sandbox allows writes.
 
-```ini
-# /etc/systemd/system/rustifymyclaw.service.d/override.conf
-[Service]
-ReadWritePaths=/home/user/projects/my-project
-```
 Then reload: `sudo systemctl daemon-reload && sudo systemctl restart rustifymyclaw`
+
+**Prerequisites:** The `acl` package must be installed (`sudo apt install acl` on Debian/Ubuntu, `sudo dnf install acl` on Fedora/RHEL).
+
+To revoke access manually, remove the ACLs and the systemd override entry:
+
+```bash
+sudo setfacl -R -x u:rustifymyclaw /home/user/projects/my-project
+sudo setfacl -R -d -x u:rustifymyclaw /home/user/projects/my-project
+# Then edit /etc/systemd/system/rustifymyclaw.service.d/override.conf
+# and remove the corresponding ReadWritePaths= line.
+sudo systemctl daemon-reload && sudo systemctl restart rustifymyclaw
+```
+
+**Note on default ACLs:** When `allow-path` sets default ACLs on a workspace directory, newly created files inherit permissions for the `rustifymyclaw` user. This changes how `umask` interacts with file creation in that directory. The ACL mask, not the process `umask`, determines effective permissions for new files.
 
 ### Security hardening
 
 The included systemd unit uses:
 
-- **`DynamicUser=yes`** — allocates an ephemeral service user, no manual user creation.
+- **`User=rustifymyclaw`** / **`Group=rustifymyclaw`** — dedicated static system user with no login shell and no home directory.
 - **`NoNewPrivileges=yes`** — the process cannot gain new privileges.
 - **`ProtectSystem=strict`** — the filesystem is read-only except for allowed paths.
-- **`ProtectHome=read-only`** — home directories are visible but not writable.
+- **`ProtectHome=false`** — home directories are accessible (workspace traversal requires this; actual access is gated by POSIX ACLs).
+- **`ReadOnlyPaths=/`** — everything read-only by default; individual workspaces are granted write access via `allow-path`.
 - **`PrivateTmp=yes`** — isolated `/tmp` namespace.
-- **`EnvironmentFile`** — secrets loaded from `/etc/rustifymyclaw/env` (mode 600).
+- **`EnvironmentFile`** — secrets loaded from `/etc/rustifymyclaw/env` (mode 640, owned by `root:rustifymyclaw`).
 
+### Migrating from DynamicUser
 
+Versions prior to this release used `DynamicUser=yes` which allocated an ephemeral UID. If you are upgrading from an earlier version:
+
+1. The service now runs as the static `rustifymyclaw` user instead of a dynamic UID.
+2. Any manual ACLs you previously granted to the dynamic UID are orphaned — re-apply them with `sudo rustifymyclaw config allow-path <path>`.
+3. The installer (`scripts/install.sh --system`) creates the user automatically. For manual upgrades, create the user first:
+   ```bash
+   sudo groupadd -r rustifymyclaw
+   sudo useradd -r -g rustifymyclaw -s /usr/sbin/nologin -d /nonexistent rustifymyclaw
+   ```
+4. Update ownership on config files:
+   ```bash
+   sudo chown root:rustifymyclaw /etc/rustifymyclaw /etc/rustifymyclaw/config.yaml /etc/rustifymyclaw/env
+   sudo chmod 750 /etc/rustifymyclaw
+   sudo chmod 640 /etc/rustifymyclaw/config.yaml /etc/rustifymyclaw/env
+   ```

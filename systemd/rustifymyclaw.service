@@ -10,10 +10,11 @@ Restart=on-failure
 RestartSec=5
 
 # Security hardening
-DynamicUser=yes
+User=rustifymyclaw
+Group=rustifymyclaw
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=false
 PrivateTmp=yes
 ReadOnlyPaths=/
 ConfigurationDirectory=rustifymyclaw
