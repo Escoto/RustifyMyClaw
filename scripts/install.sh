@@ -226,7 +226,7 @@ write_config() {
         download_file "$config_url" "$CONFIG_FILE" || \
             die "Failed to download example config from ${config_url}"
         if $SYSTEM_INSTALL; then
-            chmod 640 "$CONFIG_FILE"
+            chmod 644 "$CONFIG_FILE"
         else
             chmod 600 "$CONFIG_FILE"
         fi
@@ -350,6 +350,7 @@ main() {
         printf "       - Configure your channel (Telegram / WhatsApp / Slack)\n"
         printf "       - Set allowed_users\n"
         printf "    2. Add API tokens to %s\n" "$ENV_FILE"
+        printf "       (Optional: You can also set RUSTIFYMYCLAW_CONFIG=... here to override the config path)\n"
         printf "    3. Enable and start the service:\n"
         printf "       sudo systemctl enable --now rustifymyclaw\n"
         printf "    4. Check logs:\n"

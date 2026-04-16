@@ -238,9 +238,20 @@ sudo nano /etc/rustifymyclaw/env
 sudo systemctl enable --now rustifymyclaw
 ```
 
+### Custom Config Path
+
+If you wish to use a configuration file other than the default `/etc/rustifymyclaw/config.yaml`, you can override it using the `RUSTIFYMYCLAW_CONFIG` environment variable. Ex. use the `/etc/rustifymyclaw/env` file:
+
+```bash
+# In /etc/rustifymyclaw/env
+RUSTIFYMYCLAW_CONFIG=/path/to/your/custom-config.yaml
+```
+
+**Important:** The daemon runs as a transient non-root user. Any custom configuration file must be world-readable (e.g., `chmod 644`) so the daemon can access it.
+
 ### Enable daemon to access your workspaces / directory permissions
 
-Because `DynamicUser=yes` runs the daemon as an ephemeral user, workspace directories are read-only by default. Without this step your CLI agent can still read the project and answer questions about it, but cannot write or edit files. If you expect your agent to have write permissions, you must explicitly allow each workspace path.
+Same as before. Because the daemon runs as an ephemeral user, workspace directories are read-only by default. Without this step your CLI agent can still read the project and answer questions about it, but cannot write or edit files. If you expect your agent to have write permissions, you must explicitly allow each workspace path.
 
 Use the built-in command:
 

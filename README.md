@@ -152,7 +152,8 @@ rustifymyclaw --validate
 ### 4. Run as a Linux daemon
 
 > [!IMPORTANT]
-> **Requires explicite workspace write permissions**
+> 1 - Requires explicit workspace write permissions (otherwise your workspaces are readonly).
+> 2 - As a daemon, rustifymyclaw defaults to `/etc/rustifymyclaw/config.yaml`. To use a different config file, set the `RUSTIFYMYCLAW_CONFIG` var and ensure the file is world-readable with `chmod 644` so the daemon can access it.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Escoto/RustifyMyClaw/main/scripts/install.sh | sudo bash -s -- --system
@@ -162,7 +163,7 @@ This places the binary in `/usr/local/bin/`, config in `/etc/rustifymyclaw/`, an
 
 ```bash
 sudo nano /etc/rustifymyclaw/config.yaml     # configure workspaces/channels
-sudo nano /etc/rustifymyclaw/env             # add API tokens
+sudo nano /etc/rustifymyclaw/env             # add API tokens and/or RUSTIFYMYCLAW_CONFIG to overwrite default config location.
 sudo systemctl enable --now rustifymyclaw
 journalctl -u rustifymyclaw -f               # check logs
 ```
